@@ -12,7 +12,6 @@ include_directories(SYSTEM "../third-party/qpOASES/include")
 include_directories("../third-party/ParamHandler")
 include_directories("../bzl_quadruped_sdk/include")
 include_directories("../third-party/CSerialPort/include")
-include_directories("../third-party/BehaviorTree.CPP/include")
 
 include_directories("../lcm-types/cpp")
 include_directories("/usr/include/lcm")   # lcm includes

@@ -13,9 +13,8 @@
  * @param _controlFSMData holds all of the relevant control data
  */
 template <typename T>
-FSM_State_Prone<T>::FSM_State_Prone(ControlFSMData<T> *_controlFSMData, 
-	FSM_StateName stateNameIn, const std::string &stateStringIn)
-    : FSM_State<T>(_controlFSMData, stateNameIn, stateStringIn)
+FSM_State_Prone<T>::FSM_State_Prone(ControlFSMData<T> *_controlFSMData)
+    : FSM_State<T>(_controlFSMData, FSM_StateName::PRONE, "PRONE")
 {
   // Do nothing
   // Set the pre controls safety checks
@@ -70,7 +69,7 @@ FSM_State_Prone<T>::FSM_State_Prone(ControlFSMData<T> *_controlFSMData,
 }
 
 template <typename T>
-BT::NodeStatus FSM_State_Prone<T>::onStart()
+void FSM_State_Prone<T>::onEnter()
 {
   // Default is to not transition
   QUADRUPED_INFO(_logger, "START!!");
@@ -78,7 +77,6 @@ BT::NodeStatus FSM_State_Prone<T>::onStart()
 
   // Reset the transition data
   this->transitionData.zero();
-  QUADRUPED_INFO(_logger, "START!!");
 
   // Reset iteration counter
   iter = 0;
@@ -116,15 +114,14 @@ BT::NodeStatus FSM_State_Prone<T>::onStart()
     QUADRUPED_INFO(_logger, "UpsideDown (%d)", _UpsideDown());
   }
   _motion_start_iter = 0;
-
-  return BT::NodeStatus::RUNNING;
+  this->transitionErrorMode = 0;
 }
 
 /**
  * Calls the functions to be executed on each control loop iteration.
  */
 template <typename T>
-BT::NodeStatus FSM_State_Prone<T>::onRunning()
+void FSM_State_Prone<T>::run()
 {
   switch (_flag)
   {
@@ -149,8 +146,6 @@ BT::NodeStatus FSM_State_Prone<T>::onRunning()
   }
 
   ++_state_iter;
-
-  return BT::NodeStatus::RUNNING;
 }
 
 /**
@@ -182,6 +177,11 @@ FSM_StateName FSM_State_Prone<T>::checkTransition()
     this->nextStateName = FSM_StateName::PASSIVE;
     break;
   /// Add End
+
+  case K_DAMP:  // normal c
+    this->nextStateName = FSM_StateName::DAMP;
+    break;    
+
 
   default:
     if (this->transitionErrorMode ==
@@ -222,6 +222,10 @@ TransitionData<T> FSM_State_Prone<T>::transition()
      break;
   /// Add End
 
+  case FSM_StateName::DAMP:  // normal c
+     this->transitionData.done = true;
+     break;
+
   default:
     QUADRUPED_WARN(_logger, "Something went wrong in transition");
   }
@@ -234,7 +238,7 @@ TransitionData<T> FSM_State_Prone<T>::transition()
  * Cleans up the state information on exiting the state.
  */
 template <typename T>
-void FSM_State_Prone<T>::onHalted()
+void FSM_State_Prone<T>::onExit()
 {
   // Nothing to clean up when exiting
 }

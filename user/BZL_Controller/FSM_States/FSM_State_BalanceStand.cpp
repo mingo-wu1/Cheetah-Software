@@ -16,9 +16,8 @@
  */
 template <typename T>
 FSM_State_BalanceStand<T>::FSM_State_BalanceStand(
-    ControlFSMData<T>* _controlFSMData,
-    FSM_StateName stateNameIn, const std::string &stateStringIn)
-    : FSM_State<T>(_controlFSMData, stateNameIn, stateStringIn) {
+    ControlFSMData<T>* _controlFSMData)
+    : FSM_State<T>(_controlFSMData, FSM_StateName::BALANCE_STAND,"BALANCE_STAND") {
   // Set the pre controls safety checks
   this->turnOnAllSafetyChecks();
   // Turn off Foot pos command since it is set in WBC as operational task
@@ -46,7 +45,7 @@ FSM_State_BalanceStand<T>::FSM_State_BalanceStand(
 }
 
 template <typename T>
-BT::NodeStatus FSM_State_BalanceStand<T>::onStart() {
+void FSM_State_BalanceStand<T>::onEnter() {
 
   /// Add Begin by niuxinjian, wuchunming, 2021-03-30, Trajectory Plan
   r_TPData.setZero();
@@ -85,14 +84,14 @@ BT::NodeStatus FSM_State_BalanceStand<T>::onStart() {
   _controlFSMData_ptr->userParameters->wbc_param_mode = 0;
   QUADRUPED_INFO(_logger, "wbc_param_mode: %f", _controlFSMData_ptr->userParameters->wbc_param_mode);
   /// Add End
-  return BT::NodeStatus::RUNNING;
+  this->transitionErrorMode = 0;
 }
 
 /**
  * Calls the functions to be executed on each control loop iteration.
  */
 template <typename T>
-BT::NodeStatus FSM_State_BalanceStand<T>::onRunning() {
+void FSM_State_BalanceStand<T>::run() {
   Vec4<T> contactState;
   contactState<< 0.5, 0.5, 0.5, 0.5;
   this->_data->_stateEstimator->setContactPhase(contactState);
@@ -121,7 +120,6 @@ BT::NodeStatus FSM_State_BalanceStand<T>::onRunning() {
   _controlFSMData_ptr->userParameters->Kd_joint_bl_wbc = _controlFSMData_ptr->userParameters->Kd_joint_bl_balanceStand;
   /// Add End
   BalanceStandStep();
-  return BT::NodeStatus::RUNNING;
 }
 
 /**
@@ -183,6 +181,11 @@ FSM_StateName FSM_State_BalanceStand<T>::checkTransition() {
 
       break;
 
+    case K_DAMP:  // normal c
+      this->nextStateName = FSM_StateName::DAMP;
+      this->transitionDuration = 0.0;
+      break;
+
     case K_VISION:
       this->nextStateName = FSM_StateName::VISION;
       // Transition time is immediate
@@ -241,6 +244,11 @@ TransitionData<T> FSM_State_BalanceStand<T>::transition() {
       this->turnOffAllSafetyChecks();
       this->transitionData.done = true;
       break;
+      
+    case FSM_StateName::DAMP:
+      this->turnOffAllSafetyChecks();
+      this->transitionData.done = true;
+      break;
 
     case FSM_StateName::RECOVERY_STAND:
       this->transitionData.done = true;
@@ -266,7 +274,7 @@ TransitionData<T> FSM_State_BalanceStand<T>::transition() {
  * Cleans up the state information on exiting the state.
  */
 template <typename T>
-void FSM_State_BalanceStand<T>::onHalted() {
+void FSM_State_BalanceStand<T>::onExit() {
   _iter = 0;
   /// Add Begin by peibo, anli, 2021-09-15,add automatic dance function
 	this->_data->controlParameters->use_cubicspline_for_qpstand_test = 0;

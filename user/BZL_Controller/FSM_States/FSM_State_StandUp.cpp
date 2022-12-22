@@ -13,9 +13,8 @@
  * @param _controlFSMData holds all of the relevant control data
  */
 template <typename T>
-FSM_State_StandUp<T>::FSM_State_StandUp(ControlFSMData<T>* _controlFSMData, 
-	FSM_StateName stateNameIn, const std::string &stateStringIn)
-    : FSM_State<T>(_controlFSMData, stateNameIn, stateStringIn),
+FSM_State_StandUp<T>::FSM_State_StandUp(ControlFSMData<T>* _controlFSMData)
+    : FSM_State<T>(_controlFSMData, FSM_StateName::STAND_UP, "STAND_UP"),
 _ini_foot_pos(4){
   // Do nothing
   // Set the pre controls safety checks
@@ -27,7 +26,7 @@ _ini_foot_pos(4){
 }
 
 template <typename T>
-BT::NodeStatus FSM_State_StandUp<T>::onStart() {
+void FSM_State_StandUp<T>::onEnter() {
   // Default is to not transition
   this->nextStateName = this->stateName;
 
@@ -40,15 +39,14 @@ BT::NodeStatus FSM_State_StandUp<T>::onStart() {
   for(size_t leg(0); leg<4; ++leg){
     _ini_foot_pos[leg] = this->_data->_legController->datas[leg].p;
   }
-
-  return BT::NodeStatus::RUNNING;
+  this->transitionErrorMode = 0;
 }
 
 /**
  * Calls the functions to be executed on each control loop iteration.
  */
 template <typename T>
-BT::NodeStatus FSM_State_StandUp<T>::onRunning() {
+void FSM_State_StandUp<T>::run() {
 
   if(this->_data->_quadruped->_robotType == RobotType::MINI_CHEETAH) {
     T hMax = 0.25;
@@ -65,8 +63,6 @@ BT::NodeStatus FSM_State_StandUp<T>::onRunning() {
         progress*(-hMax) + (1. - progress) * _ini_foot_pos[i][2];
     }
   }
-
-  return BT::NodeStatus::RUNNING;
 }
 
 /**
@@ -100,6 +96,10 @@ FSM_StateName FSM_State_StandUp<T>::checkTransition() {
     case K_PASSIVE:  // normal c
       this->nextStateName = FSM_StateName::PASSIVE;
       break;
+          
+    case K_DAMP:  // normal c
+      this->nextStateName = FSM_StateName::DAMP;
+      break;
 
     default:
       if (this->transitionErrorMode ==
@@ -130,6 +130,10 @@ TransitionData<T> FSM_State_StandUp<T>::transition() {
       this->transitionData.done = true;
       break;
 
+    case FSM_StateName::DAMP:  // normal
+      this->transitionData.done = true;
+      break;
+
     case FSM_StateName::BALANCE_STAND:
       this->transitionData.done = true;
       break;
@@ -155,7 +159,7 @@ TransitionData<T> FSM_State_StandUp<T>::transition() {
  * Cleans up the state information on exiting the state.
  */
 template <typename T>
-void FSM_State_StandUp<T>::onHalted() {
+void FSM_State_StandUp<T>::onExit() {
   // Nothing to clean up when exiting
 }
 

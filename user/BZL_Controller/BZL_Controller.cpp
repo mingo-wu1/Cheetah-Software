@@ -1,11 +1,6 @@
 #include "BZL_Controller.hpp"
 
-BZL_Controller::BZL_Controller():RobotController()
-{
-  BZL::SwitchConfig switchConfig;
-  switchConfig_ = switchConfig.GetConfig();
-  gpSwitchNode_ = std::make_shared<BZL::GamepadSwitchNode>();
-}
+BZL_Controller::BZL_Controller():RobotController(){  }
 
 //#define RC_ESTOP
 /**
@@ -25,7 +20,9 @@ void BZL_Controller::initializeController() {
                                       _desiredStateCommand, _controlParameters,
                                       _visualizationData, &userParameters,
                                       /// Add Begin by wuchunming, 20210716, add serialport pressure sensor
-                                      sensorData_, switchConfig_);
+                                      sensorData_
+                                      /// Add End
+                                      );
 
 
   /// Add by hanyuanqiang, 2021-06-18, Using SDK server interface
@@ -68,36 +65,7 @@ void BZL_Controller::runController() {
   /// Add end
 
   // Run the Control FSM code
-  //_controlFSM->runFSM();
-  SwitchFSMState(_desiredStateCommand->rcCommand->mode, _controlParameters);
-  switchConfig_.blackboard->set(BZL::FSM_STATE, gpSwitchNode_->SwitchFSMState(_desiredStateCommand->rcCommand->mode));
-
-  //BZL::StatusChangeLogger logger_cout(_controlFSM);
-  _controlFSM->executeTick();
+  _controlFSM->runFSM();
 }
 
-void BZL_Controller::SwitchFSMState(int fsmState, RobotControlParameters* controlParameters){
-  if(fsmState == RC_mode::STAND_UP){ //1
-    controlParameters->control_mode = K_STAND_UP;
-  }else if(fsmState == RC_mode::QP_STAND){ //2
-    controlParameters->control_mode = K_BALANCE_STAND;
-  }else if(fsmState == RC_mode::RECOVERY_STAND){ //3
-    controlParameters->control_mode = K_RECOVERY_STAND;
-  }else if(fsmState == RC_mode::PRONE){ //4
-    controlParameters->control_mode = K_PRONE;
-  }else if(fsmState == RC_mode::LOCOMOTION){ //5
-    controlParameters->control_mode = K_LOCOMOTION;
-  }else if(fsmState == RC_mode::BACKFLIP || fsmState == RC_mode::BACKFLIP_PRE){ //6
-    controlParameters->control_mode = K_BACKFLIP;
-  }else if(fsmState == RC_mode::FRONTJUMP){ //7
-    controlParameters->control_mode = K_FRONTJUMP;
-  }else if(fsmState == RC_mode::VISION){ //8
-    controlParameters->control_mode = K_VISION;
-  }else if(fsmState == RC_mode::JOINT_PD){ //9
-    controlParameters->control_mode = K_JOINT_PD;
-  }else if(fsmState == RC_mode::IMPEDANCE_CONTROL){ //10
-    controlParameters->control_mode = K_IMPEDANCE_CONTROL;
-  }else if(fsmState == RC_mode::PASSIVE){ //100
-    controlParameters->control_mode = K_PASSIVE;
-  }
-}
+

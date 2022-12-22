@@ -14,9 +14,8 @@
  */
 template <typename T>
 FSM_State<T>::FSM_State(ControlFSMData<T>* _controlFSMData,
-                        FSM_StateName stateNameIn, const std::string &stateStringIn)
-    : BZL::ActionNode(stateStringIn),
-      _data(_controlFSMData),
+                        FSM_StateName stateNameIn, std::string stateStringIn)
+    : _data(_controlFSMData),
       stateName(stateNameIn),
       stateString(stateStringIn),
       _logger("FSM_State") {

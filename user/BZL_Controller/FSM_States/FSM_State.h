@@ -10,12 +10,8 @@
 
 #include <Controllers/BalanceController/BalanceController.hpp>
 
-/// Add Begin
-#include "behavior_controller.h"
-/// Add End
-
 // Normal robot states
-/* #define K_PASSIVE 0
+#define K_PASSIVE 0
 #define K_STAND_UP 1
 #define K_BALANCE_STAND 3
 #define K_LOCOMOTION 4
@@ -24,6 +20,9 @@
 #define K_VISION 8
 #define K_BACKFLIP 9
 #define K_FRONTJUMP 11
+
+//Add by anli
+#define K_DAMP 25
 
 /// Add Begin by peibo, 2021-03-01, add prone mode
 #define K_PRONE 12
@@ -34,44 +33,48 @@
 #define K_JOINT_PD 51
 #define K_IMPEDANCE_CONTROL 52
 
-#define K_INVALID 100 */
+#define K_INVALID 100
 
 /**
  * Enumerate all of the FSM states so we can keep track of them.
  */
 enum class FSM_StateName {
-  STAND_UP,        
-  BALANCE_STAND,    
-  RECOVERY_STAND,  
-  PRONE,            
-  LOCOMOTION,       
-  BACKFLIP,         
-  FRONTJUMP,        
-  VISION,           
-  JOINT_PD,         
-  IMPEDANCE_CONTROL,
-  PASSIVE,
   INVALID,
-  AAA
+  PASSIVE,
+  JOINT_PD,
+  IMPEDANCE_CONTROL,
+  STAND_UP,
+  BALANCE_STAND,
+  LOCOMOTION,
+  RECOVERY_STAND,
+  VISION,
+  BACKFLIP,
+  FRONTJUMP,
+  //add by anli
+  DAMP,
+  /// Add Begin by peibo, 2021-03-01, add prone mode
+  PRONE,
+  /// Add End
+
 };
 
 /**
  *
  */
 template <typename T>
-class FSM_State : public BZL::ActionNode{
+class FSM_State {
  public:
   EIGEN_MAKE_ALIGNED_OPERATOR_NEW
 
   // Generic constructor for all states
   FSM_State(ControlFSMData<T>* _controlFSMData, FSM_StateName stateNameIn,
-            const std::string &stateStringIn);
+            std::string stateStringIn);
 
   // Behavior to be carried out when entering a state
-  //virtual void onEnter() = 0;// {}
+  virtual void onEnter() = 0;// {}
 
   // Run the normal behavior for the state
-  //virtual void run() = 0; //{}
+  virtual void run() = 0; //{}
 
   // Manages state specific transitions
   virtual FSM_StateName checkTransition() { return FSM_StateName::INVALID; }
@@ -80,7 +83,7 @@ class FSM_State : public BZL::ActionNode{
   virtual TransitionData<T> transition() { return transitionData; }
 
   // Behavior to be carried out when exiting a state
-  //virtual void onExit() = 0; // {}
+  virtual void onExit() = 0; // {}
 
   //
   void jointPDControl(int leg, Vec3<T> qDes, Vec3<T> qdDes);

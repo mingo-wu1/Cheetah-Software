@@ -39,30 +39,31 @@ void initialize_mpc()
 #endif
 }
 
+// 功能：二次规划器QP的参数配置，第一次进来先初始化MPC函数用的
 void setup_problem(double dt, int horizon, double mu, double f_max)
 {
   //mu = 0.6;
-  if(first_run)
+  if(first_run)                                                                                                   //（1）第一次运行就初始化mpc//
   {
     first_run = false;
-    initialize_mpc();
+    initialize_mpc();                                                                                             //初始化mpc
   }
 
-#ifdef K_DEBUG
+#ifdef K_DEBUG                                                                                                    //MPC调试模式
   printf("[MPC] Got new problem configuration!\n");
     printf("[MPC] Prediction horizon length: %d\n      Force limit: %.3f, friction %.3f\n      dt: %.3f\n",
             horizon,f_max,mu,dt);
 #endif
 
   //pthread_mutex_lock(&problem_cfg_mt);
-
-  problem_configuration.horizon = horizon;
-  problem_configuration.f_max = f_max;
-  problem_configuration.mu = mu;
-  problem_configuration.dt = dt;
+  //（2）把形参赋值到计算的变量中
+  problem_configuration.horizon = horizon;                                                                        //1)预测分段数
+  problem_configuration.f_max = f_max;                                                                            //2)最大力
+  problem_configuration.mu = mu;                                                                                  //3)摩擦系数
+  problem_configuration.dt = dt;                                                                                  //4)时间
 
   //pthread_mutex_unlock(&problem_cfg_mt);
-  resize_qp_mats(horizon);
+  resize_qp_mats(horizon);                                                                                        //（3）重组qp矩阵，把状态方程转换成二次规划QP求解器的表达形式
 }
 
 //inline to motivate gcc to unroll the loop in here.
@@ -85,6 +86,7 @@ int has_solved = 0;
 //  solve_mpc(&update, &problem_configuration);
 //}
 //safely copies problem data and starts the solver
+// (2)功能：更新QP问题数据
 void update_problem_data(double* p, double* v, double* q, double* w, double* r, double yaw, double* weights, double* state_trajectory, double alpha, int* gait)
 {
   mfp_to_flt(update.p,p,3);
@@ -93,17 +95,18 @@ void update_problem_data(double* p, double* v, double* q, double* w, double* r, 
   mfp_to_flt(update.w,w,3);
   mfp_to_flt(update.r,r,12);
   update.yaw = yaw;
-  mfp_to_flt(update.weights,weights,12);
+  mfp_to_flt(update.weights,weights,12);                                                        //这是安全的，解算器没有运行，并且从同一线程调用update_problem_data和setup_problem
   //this is safe, the solver isn't running, and update_problem_data and setup_problem
   //are called from the same thread
   mfp_to_flt(update.traj,state_trajectory,12*problem_configuration.horizon);
   update.alpha = alpha;
   mint_to_u8(update.gait,gait,4*problem_configuration.horizon);
 
-  solve_mpc(&update, &problem_configuration);
-  has_solved = 1;
+  solve_mpc(&update, &problem_configuration);                                                   //解mpc
+  has_solved = 1;                                                                               //已解
 }
 
+// （4）更新jcqp求解器设置函数
 void update_solver_settings(int max_iter, double rho, double sigma, double solver_alpha, double terminate, double use_jcqp) {
   update.max_iterations = max_iter;
   update.rho = rho;
@@ -118,10 +121,12 @@ void update_solver_settings(int max_iter, double rho, double sigma, double solve
     update.use_jcqp = 0;
 }
 
+// （5）更新QP问题参数和解函数
 void update_problem_data_floats(float* p, float* v, float* q, float* w,
                                 float* r, float yaw, float* weights,
                                 float* state_trajectory, float alpha, int* gait)
 {
+  //（1）将传入的10个参数复制给类变量
   update.alpha = alpha;
   update.yaw = yaw;
   mint_to_u8(update.gait,gait,4*problem_configuration.horizon);
@@ -132,7 +137,9 @@ void update_problem_data_floats(float* p, float* v, float* q, float* w,
   memcpy((void*)update.r,(void*)r,sizeof(float)*12);
   memcpy((void*)update.weights,(void*)weights,sizeof(float)*12);
   memcpy((void*)update.traj,(void*)state_trajectory, sizeof(float) * 12 * problem_configuration.horizon);
+  //（2）解mpc
   solve_mpc(&update, &problem_configuration);
+  //（3）挂起已解MPC的标志位
   has_solved = 1;
 
 }
@@ -160,11 +167,12 @@ void update_problem_data_floats_yzy(float* p, float* v, float* q, float* w,
 
 }
 /// Add End
-
+//（6）更新x_drag函数
 void update_x_drag(float x_drag) {
   update.x_drag = x_drag;
 }
 
+//（3）获取索引号的结果函数
 double get_solution(int index)
 {
   if(!has_solved) return 0.f;

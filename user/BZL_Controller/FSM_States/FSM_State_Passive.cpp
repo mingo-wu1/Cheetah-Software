@@ -13,9 +13,8 @@
  * @param _controlFSMData holds all of the relevant control data
  */
 template <typename T>
-FSM_State_Passive<T>::FSM_State_Passive(ControlFSMData<T>* _controlFSMData, 
-	FSM_StateName stateNameIn, const std::string &stateStringIn)
-    : FSM_State<T>(_controlFSMData, stateNameIn, stateStringIn) {
+FSM_State_Passive<T>::FSM_State_Passive(ControlFSMData<T>* _controlFSMData)
+    : FSM_State<T>(_controlFSMData, FSM_StateName::PASSIVE, "PASSIVE") {
   // Do nothing
   // Set the pre controls safety checks
   this->checkSafeOrientation = false;
@@ -26,23 +25,22 @@ FSM_State_Passive<T>::FSM_State_Passive(ControlFSMData<T>* _controlFSMData,
 }
 
 template <typename T>
-BT::NodeStatus FSM_State_Passive<T>::onStart() {
+void FSM_State_Passive<T>::onEnter() {
   // Default is to not transition
   this->nextStateName = this->stateName;
 
   // Reset the transition data
   this->transitionData.zero();
-  return BT::NodeStatus::RUNNING;
+  this->transitionErrorMode = 0;
 }
 
 /**
  * Calls the functions to be executed on each control loop iteration.
  */
 template <typename T>
-BT::NodeStatus FSM_State_Passive<T>::onRunning() {
+void FSM_State_Passive<T>::run() {
   // Do nothing, all commands should begin as zeros
   testTransition();
-    return BT::NodeStatus::RUNNING;
 }
 
 /**
@@ -72,6 +70,11 @@ FSM_StateName FSM_State_Passive<T>::checkTransition() {
   switch ((int)this->_data->controlParameters->control_mode) {
     case K_PASSIVE:  // normal c (0)
       // Normal operation for state based transitions
+      break;
+      
+    case K_DAMP:
+      // Requested switch to joint PD control
+      this->nextStateName = FSM_StateName::DAMP;
       break;
 
     case K_JOINT_PD:
@@ -123,7 +126,7 @@ TransitionData<T> FSM_State_Passive<T>::transition() {
  * Cleans up the state information on exiting the state.
  */
 template <typename T>
-void FSM_State_Passive<T>::onHalted() {
+void FSM_State_Passive<T>::onExit() {
   // Nothing to clean up when exiting
 }
 

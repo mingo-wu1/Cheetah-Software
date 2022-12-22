@@ -1,5 +1,3 @@
-find_package(BehaviorTreeV3 REQUIRED)
-
 include_directories("./")
 include_directories("./Controllers")
 include_directories("./FSM_States")
@@ -12,7 +10,6 @@ include_directories("../../third-party/ParamHandler")
 include_directories("../../bzl_quadruped_sdk/include")
 include_directories("../../third-party/CSerialPort/include")
 include_directories("../../auto_task_example/include")
-#include_directories("../../third-party/BehaviorTree.CPP/include")
 
 include_directories("../../lcm-types/cpp")
 include_directories("/usr/include/lcm")   # lcm includes
@@ -41,6 +38,5 @@ target_link_libraries(bzl_ctrl VisionMPC)
 target_link_libraries(bzl_ctrl bzl_quadruped_sdk_server)
 target_link_libraries(bzl_ctrl libcserialport)
 target_link_libraries(bzl_ctrl autoTaskExample)
-target_link_libraries(bzl_ctrl BT::behaviortree_cpp_v3)
 
 install(TARGETS  bzl_ctrl RUNTIME DESTINATION bin)

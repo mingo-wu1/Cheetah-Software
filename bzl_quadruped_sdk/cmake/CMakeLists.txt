@@ -4,7 +4,7 @@ project(bzl_quadruped_sdk)
 
 set(_VERSION_MAJOR 0)
 set(_VERSION_MINOR 0)
-set(_VERSION_PATCH 1)
+set(_VERSION_PATCH 2)
 
 set(CMAKE_CXX_STANDARD 14)
 

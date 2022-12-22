@@ -17,9 +17,8 @@
  * @param _controlFSMData holds all of the relevant control data
  */
 template <typename T>
-FSM_State_Locomotion<T>::FSM_State_Locomotion(ControlFSMData<T>* _controlFSMData, 
-	FSM_StateName stateNameIn, const std::string &stateStringIn)
-    : FSM_State<T>(_controlFSMData, stateNameIn, stateStringIn)
+FSM_State_Locomotion<T>::FSM_State_Locomotion(ControlFSMData<T>* _controlFSMData)
+    : FSM_State<T>(_controlFSMData, FSM_StateName::LOCOMOTION, "LOCOMOTION")
 {
   if(_controlFSMData->_quadruped->_robotType == RobotType::MINI_CHEETAH){
     cMPCOld = new ConvexMPCLocomotion(_controlFSMData->controlParameters->controller_dt,
@@ -53,7 +52,7 @@ FSM_State_Locomotion<T>::FSM_State_Locomotion(ControlFSMData<T>* _controlFSMData
 }
 
 template <typename T>
-BT::NodeStatus FSM_State_Locomotion<T>::onStart() {
+void FSM_State_Locomotion<T>::onEnter() {
   // Default is to not transition
   this->nextStateName = this->stateName;
 
@@ -73,34 +72,20 @@ BT::NodeStatus FSM_State_Locomotion<T>::onStart() {
   }
   QUADRUPED_DEBUG(_logger, "wbc_param_mode: %d", (int)_controlFSMData_ptr->userParameters->wbc_param_mode);
   /// Add End
-  return BT::NodeStatus::RUNNING;
+  this->transitionErrorMode = 0;
 }
 
 /**
  * Calls the functions to be executed on each control loop iteration.
  */
 template <typename T>
-BT::NodeStatus FSM_State_Locomotion<T>::onRunning() {
+void FSM_State_Locomotion<T>::run() {
   /// Add Begin by wuchunming, 20211020, Anti kick function in recovery stand fsm state
   SafeChecker();
   /// Add End
 
   // Call the locomotion control logic for this iteration
   LocomotionControlStep();
-
-  /// Add Begin by lihao, wuchunming, 20211222, lock switch node for special transform
-  bool transDone = true;
-  for(int leg = 0; leg < 4; leg++)
-    if(fabs(cMPCOld->contact_state[leg] - 0) < 1e-6)
-      transDone = false;
-  if(transDone == true){
-    BZL::TransLock::Instance().done = true;
-    return BT::NodeStatus::RUNNING;
-  }
-  
-  BZL::TransLock::Instance().done = false;
-  /// Add End
-  return BT::NodeStatus::RUNNING;
 }
 
 extern rc_control_settings rc_control;
@@ -140,6 +125,13 @@ FSM_StateName FSM_State_Locomotion<T>::checkTransition() {
         // Transition time is immediate
         this->transitionDuration = 0.0;
 
+        break;
+
+      case K_DAMP:
+        // Requested change to BALANCE_STAND
+        this->nextStateName = FSM_StateName::DAMP;
+        // Transition time is immediate
+        this->transitionDuration = 0.0;
         break;
 
       case K_STAND_UP:
@@ -203,6 +195,14 @@ TransitionData<T> FSM_State_Locomotion<T>::transition() {
       break;
     */
     /// Mod End
+    //Add by anli
+    case FSM_StateName::DAMP:
+      this->turnOffAllSafetyChecks();
+
+      this->transitionData.done = true;
+
+      break;
+    //end
     case FSM_StateName::PASSIVE:
       this->turnOffAllSafetyChecks();
 
@@ -285,8 +285,9 @@ bool FSM_State_Locomotion<T>::locomotionSafe() {
  * Cleans up the state information on exiting the state.
  */
 template <typename T>
-void FSM_State_Locomotion<T>::onHalted() {
+void FSM_State_Locomotion<T>::onExit() {
   // Nothing to clean up when exiting
+  iter = 0;
 }
 
 /**
@@ -401,7 +402,7 @@ void FSM_State_Locomotion<T>::SafeChecker(){
       timer = 0;
     }else{}
     auto data = this->_data->_stateEstimator->getResult();
-    if(std::abs(data.vBody[0]) >= 0.2 || std::abs(data.vBody[1]) >= 0.2 || std::abs(data.rpy[0]) >= 0.05){
+    if(std::abs(data.vBody[0]) >= 0.2 || std::abs(data.vBody[1]) >= 0.2){
       timer = 0;
     }else{}
   }

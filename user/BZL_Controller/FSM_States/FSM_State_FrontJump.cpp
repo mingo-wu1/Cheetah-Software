@@ -14,10 +14,9 @@
  * @param _controlFSMData holds all of the relevant control data
  */
 template <typename T>
-FSM_State_FrontJump<T>::FSM_State_FrontJump(ControlFSMData<T>* _controlFSMData, 
-	FSM_StateName stateNameIn, const std::string &stateStringIn)
+FSM_State_FrontJump<T>::FSM_State_FrontJump(ControlFSMData<T>* _controlFSMData)
   ///Mod by Peibo,2021-08-04,fix the wrong state name
-    : FSM_State<T>(_controlFSMData, stateNameIn, stateStringIn){
+    : FSM_State<T>(_controlFSMData, FSM_StateName::FRONTJUMP, "FRONTJUMP"){
   ///Ori Code:
   //: FSM_State<T>(_controlFSMData, FSM_StateName::STAND_UP, "STAND_UP"){
   ///Mod End
@@ -41,7 +40,7 @@ FSM_State_FrontJump<T>::FSM_State_FrontJump(ControlFSMData<T>* _controlFSMData,
 
 
 template <typename T>
-BT::NodeStatus FSM_State_FrontJump<T>::onStart() {
+void FSM_State_FrontJump<T>::onEnter() {
   // Default is to not transition
   this->nextStateName = this->stateName;
 
@@ -61,15 +60,14 @@ BT::NodeStatus FSM_State_FrontJump<T>::onStart() {
     initial_jpos[i] = this->_data->_legController->datas[i].q;
   }
   front_jump_ctrl_->SetParameter();
-
-  return BT::NodeStatus::RUNNING;
+  this->transitionErrorMode = 0;
 }
 
 /**
  * Calls the functions to be executed on each control loop iteration.
  */
 template <typename T>
-BT::NodeStatus FSM_State_FrontJump<T>::onRunning() {
+void FSM_State_FrontJump<T>::run() {
 
 // Command Computation
   if (_b_running) {
@@ -82,8 +80,7 @@ BT::NodeStatus FSM_State_FrontJump<T>::onRunning() {
 
   ++_count;
   _curr_time += this->_data->controlParameters->controller_dt;
-  
-  return BT::NodeStatus::RUNNING;
+
 }
 
 
@@ -205,6 +202,10 @@ FSM_StateName FSM_State_FrontJump<T>::checkTransition() {
       this->nextStateName = FSM_StateName::PASSIVE;
       break;
 
+    case K_DAMP:
+      this->nextStateName = FSM_StateName::DAMP;
+      break;
+
     case K_BALANCE_STAND: 
       this->nextStateName = FSM_StateName::BALANCE_STAND;
       break;
@@ -238,6 +239,10 @@ TransitionData<T> FSM_State_FrontJump<T>::transition() {
       this->transitionData.done = true;
       break;
 
+    case FSM_StateName::DAMP:  // normal
+      this->transitionData.done = true;
+      break;
+
     case FSM_StateName::BALANCE_STAND:
       this->transitionData.done = true;
       break;
@@ -263,7 +268,7 @@ TransitionData<T> FSM_State_FrontJump<T>::transition() {
  * Cleans up the state information on exiting the state.
  */
 template <typename T>
-void FSM_State_FrontJump<T>::onHalted() {
+void FSM_State_FrontJump<T>::onExit() {
   // nothing to clean up?
 }
 

@@ -10,14 +10,13 @@ template <typename T>
 class FSM_State_JointPD : public FSM_State<T> {
  public:
   EIGEN_MAKE_ALIGNED_OPERATOR_NEW
-  FSM_State_JointPD(ControlFSMData<T>* _controlFSMData, 
-	FSM_StateName stateNameIn, const std::string &stateStringIn);
+  FSM_State_JointPD(ControlFSMData<T>* _controlFSMData);
 
   // Behavior to be carried out when entering a state
-  BT::NodeStatus onStart();
+  void onEnter();
 
   // Run the normal behavior for the state
-  BT::NodeStatus onRunning();
+  void run();
 
   // Checks for any transition triggers
   FSM_StateName checkTransition();
@@ -26,7 +25,7 @@ class FSM_State_JointPD : public FSM_State<T> {
   TransitionData<T> transition();
 
   // Behavior to be carried out when exiting a state
-  void onHalted();
+  void onExit();
 
  private:
   BZL_QUADRUPED::Logger _logger = BZL_QUADRUPED::Logger("FSM_State_JointPD");

@@ -51,7 +51,7 @@ void sbus_packet_complete() {
   switch(estop_switch) {
 
     case SWITCH_UP: // ESTOP
-      // selected_mode = RC_mode::OFF;
+      selected_mode = RC_mode::OFF;
       break;
 
     case SWITCH_MIDDLE: // recover
@@ -162,7 +162,7 @@ void sbus_packet_complete() {
 }
 
 bool trigger = mode_edge_trigger.trigger(selected_mode);
-if(trigger || /* selected_mode == RC_mode::OFF || */ selected_mode == RC_mode::RECOVERY_STAND) {
+if(trigger || selected_mode == RC_mode::OFF || selected_mode == RC_mode::RECOVERY_STAND) {
   if(trigger) {
     printf("MODE TRIGGER!\n");
   }

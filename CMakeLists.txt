@@ -4,6 +4,7 @@ set(CMAKE_DISABLE_IN_SOURCE_BUILD ON)
 set(CMAKE_DISABLE_SOURCE_CHANGES  ON)
 
 add_compile_options(-std=c++11)
+set(CMAKE_THREAD_LIBS_INIT "-lpthread")
 
 include(${CMAKE_CURRENT_SOURCE_DIR}/cpack/pack2deb.cmake)
 
@@ -40,9 +41,9 @@ else(MINI_CHEETAH_BUILD)
 
   if(CMAKE_SYSTEM_NAME MATCHES Linux)
     set(CMAKE_CXX_FLAGS "-O3 -no-pie -march=native -ggdb -Wall \
-    -Wextra -Wcast-align -Wdisabled-optimization -Wformat=2 ")
-    #-Winit-self -Wmissing-include-dirs -Woverloaded-virtual \
-    #-Wsign-promo -Werror"
+    -Wextra -Wcast-align -Wdisabled-optimization -Wformat=2 \
+    -Winit-self -Wmissing-include-dirs -Woverloaded-virtual \
+    -Wsign-promo -Werror")
   elseif(APPLE)
     set(CMAKE_CXX_FLAGS "-O3 -march=native -ggdb -Wall \
     -Wextra -Wcast-align -Wdisabled-optimization -Wformat=2 \

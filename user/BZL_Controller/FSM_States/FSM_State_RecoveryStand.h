@@ -9,14 +9,13 @@
 template <typename T>
 class FSM_State_RecoveryStand : public FSM_State<T> {
  public:
-  FSM_State_RecoveryStand(ControlFSMData<T>* _controlFSMData, 
-	FSM_StateName stateNameIn, const std::string &stateStringIn);
+  FSM_State_RecoveryStand(ControlFSMData<T>* _controlFSMData);
 
   // Behavior to be carried out when entering a state
-  BT::NodeStatus onStart() override final;
+  void onEnter();
 
   // Run the normal behavior for the state
-  BT::NodeStatus onRunning() override final;
+  void run();
 
   // Checks for any transition triggers
   FSM_StateName checkTransition();
@@ -25,7 +24,7 @@ class FSM_State_RecoveryStand : public FSM_State<T> {
   TransitionData<T> transition();
 
   // Behavior to be carried out when exiting a state
-  void onHalted() override final;
+  void onExit();
 
   TransitionData<T> testTransition();
 

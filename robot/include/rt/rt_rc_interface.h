@@ -1,11 +1,3 @@
-/*
- * @Author: your name
- * @Date: 2021-10-26 19:40:18
- * @LastEditTime: 2021-10-26 19:40:18
- * @LastEditors: your name
- * @Description: In User Settings Edit
- * @FilePath: /Cheetah_BT_test/robot/include/rt/rt_rc_interface.h
- */
 /**
  * @file rt_rc_interface.h
  *
@@ -26,26 +18,28 @@ class rc_control_settings {
 
 
 namespace RC_mode{
-/*   constexpr int OFF = 0; */
+  constexpr int OFF = 0;
 
+  /// Add Begin by victor, 2021-01-21, add STAND_UP robot control mode
   constexpr int STAND_UP = 1;
-  constexpr int QP_STAND = 2;
-  constexpr int RECOVERY_STAND = 3;
-  constexpr int PRONE = 4;
-  constexpr int LOCOMOTION = 5;
-  constexpr int BACKFLIP = 6;
-  constexpr int FRONTJUMP = 7;
-  constexpr int VISION = 8;
-  constexpr int JOINT_PD = 9;
-  constexpr int IMPEDANCE_CONTROL = 10;
+  /// Add End
 
-  constexpr int BACKFLIP_PRE = 11;
+  constexpr int QP_STAND = 3;
+  constexpr int BACKFLIP_PRE = 4;
+  constexpr int BACKFLIP = 5;
+  constexpr int VISION = 6;
+  constexpr int LOCOMOTION = 11;
+  constexpr int RECOVERY_STAND = 12;
+  
+  /// Add Begin by peibo, 2021-03-02, add prone mode
+  constexpr int PRONE = 14;
+  /// Add End
 
   // Experiment Mode
   constexpr int TWO_LEG_STANCE_PRE = 20;
   constexpr int TWO_LEG_STANCE = 21;
-
-  constexpr int PASSIVE = 100;
+  //Add by anli
+  constexpr int DAMP = 25;
 };
 
 void sbus_packet_complete();

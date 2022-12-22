@@ -154,6 +154,7 @@ void c2qp(Matrix<fpt,13,13> Ac, Matrix<fpt,13,12> Bc,fpt dt,s16 horizon)
 #endif
 }
 
+// 功能：重组qp矩阵，把状态方程转换成二次规划QP求解器的表达形式
 void resize_qp_mats(s16 horizon)
 {
   int mcount = 0;
@@ -190,7 +191,7 @@ void resize_qp_mats(s16 horizon)
 
   //printf("realloc'd %d floating point numbers.\n",mcount);
   mcount = 0;
-
+  //二次規劃的變量
   A_qp.setZero();
   B_qp.setZero();
   S.setZero();
@@ -200,7 +201,7 @@ void resize_qp_mats(s16 horizon)
   qH.setZero();
   eye_12h.setIdentity();
 
-  //TODO: use realloc instead of free/malloc on size changes
+  //TODO: use realloc instead of free/malloc on size changes      在大小更改时使用realloc而不是free/malloc
 
   if(real_allocated)
   {
@@ -263,19 +264,21 @@ inline Matrix<fpt,3,3> cross_mat(Matrix<fpt,3,3> I_inv, Matrix<fpt,3,1> r)
     -r(1), r(0), 0.f;
   return I_inv * cm;
 }
+
+// 功能：连续时间状态空间矩阵
 //continuous time state space matrices.
 void ct_ss_mats(Matrix<fpt,3,3> I_world, fpt m, Matrix<fpt,3,4> r_feet, Matrix<fpt,3,3> R_yaw, Matrix<fpt,13,13>& A, Matrix<fpt,13,12>& B, float x_drag)
 {
-  A.setZero();
+  A.setZero();                                          // A矩阵
   A(3,9) = 1.f;
-  A(11,9) = x_drag;
+  A(11,9) = x_drag;                                     //z轴方向加速度受x轴方向速度的影响程度
   A(4,10) = 1.f;
   A(5,11) = 1.f;
 
   A(11,12) = 1.f;
   A.block(0,6,3,3) = R_yaw.transpose();
 
-  B.setZero();
+  B.setZero();                                          // B矩阵
   Matrix<fpt,3,3> I_inv = I_world.inverse();
 
   for(s16 b = 0; b < 4; b++)
@@ -285,7 +288,7 @@ void ct_ss_mats(Matrix<fpt,3,3> I_world, fpt m, Matrix<fpt,3,4> r_feet, Matrix<f
   }
 }
 
-
+// 功能： 四元数转欧拉角
 void quat_to_rpy(Quaternionf q, Matrix<fpt,3,1>& rpy)
 {
   //from my MATLAB implementation
@@ -319,63 +322,70 @@ void print_update_data(update_data_t* update, s16 horizon)
 }
 
 
-Matrix<fpt,13,1> x_0;
-Matrix<fpt,3,3> I_world;
-Matrix<fpt,13,13> A_ct;
-Matrix<fpt,13,12> B_ct_r;
+Matrix<fpt,13,1> x_0;                   //初始状态
+Matrix<fpt,3,3> I_world;                //惯性张量 世界坐标系下
+Matrix<fpt,13,13> A_ct;                 //储存连续状态转移矩阵
+Matrix<fpt,13,12> B_ct_r;               //储存连续控制矩阵
 
-
+// 【P预测中-优化问题解算范畴】求解MPC问题方法技巧，功能：求解MPC问题过程
 void solve_mpc(update_data_t* update, problem_setup* setup)
 {
+  /*（1）设置机器人状态，将数组值转换成矩阵，方便计算连续状态空间方程*/ // p：位置 // v：速度 // q：角速度 // w：四元数 // r：四脚从COM指向足端向量 //yaw：偏航角
   /// Mod Begin yuzhiyou 2021-04-13, mod robot state
   rs.set(update->p, update->v, update->q, update->w, update->r, update->rpy);
   /// Ori Code:
   // rs.set(update->p, update->v, update->q, update->w, update->r, update->yaw);
   /// Mod End
 
-#ifdef K_PRINT_EVERYTHING
+#ifdef K_PRINT_EVERYTHING                             //打印输出MPC问题的数据，和机器人数据，调试的时候用，真正运行的时候不用的
 
   printf("-----------------\n");
   printf("   PROBLEM DATA  \n");
   printf("-----------------\n");
-  print_problem_setup(setup);
+  print_problem_setup(setup);                         //打印问题配置
 
   printf("-----------------\n");
   printf("    ROBOT DATA   \n");
   printf("-----------------\n");
-  rs.print();
+  rs.print();                                         //rs代表机器人状态，机器人状态打印，包括位置、线速度、角速度、旋转角、偏航角、足端位置、身体惯量
   print_update_data(update,setup->horizon);
 #endif
 
+  /*(2)设置初始状态形式 (13个状态表示)把写入状态变量x_0中*/ //欧拉角（3x1）【rpy(2), rpy(1), rpy(0)】//机身位置（3x1）【rs.p】//机身角速度（3*1）【rs.w】//机身速度（3*1）【rs.v】//重力【-9.8f】
   //roll pitch yaw
-  Matrix<fpt,3,1> rpy;
-  quat_to_rpy(rs.q,rpy);
+  Matrix<fpt,3,1> rpy;                                //定义一个欧拉角表达三个方向  roll pitch yaw
+  quat_to_rpy(rs.q,rpy);                              //把四元数方向形式 转成 欧拉角方向形式
 
   //initial state (13 state representation)
   x_0 << rpy(2), rpy(1), rpy(0), rs.p , rs.w, rs.v, -9.8f;
-  I_world = rs.R_yaw * rs.I_body * rs.R_yaw.transpose(); //original
+  /*（3）求世界坐标系下惯性矩阵，式（15）*/
+  I_world = rs.R_yaw * rs.I_body * rs.R_yaw.transpose(); //original 
   //I_world = rs.R_yaw.transpose() * rs.I_body * rs.R_yaw;
   //cout<<rs.R_yaw<<endl;
+  /*（4）求连续状态空间矩阵方程 式（16）和式（17）*/
   ct_ss_mats(I_world,rs.m,rs.r_feet,rs.R_yaw,A_ct,B_ct_r, update->x_drag);
 
 
-#ifdef K_PRINT_EVERYTHING
-  cout<<"Initial state: \n"<<x_0<<endl;
-    cout<<"World Inertia: \n"<<I_world<<endl;
-    cout<<"A CT: \n"<<A_ct<<endl;
-    cout<<"B CT (simplified): \n"<<B_ct_r<<endl;
+#ifdef K_PRINT_EVERYTHING                               //调试的时候，如果要打印
+  cout<<"Initial state: \n"<<x_0<<endl;                 //打印初状态
+    cout<<"World Inertia: \n"<<I_world<<endl;           //世界坐标系下的惯量
+    cout<<"A CT: \n"<<A_ct<<endl;                       //状态转移矩阵A
+    cout<<"B CT (simplified): \n"<<B_ct_r<<endl;        //控制矩阵B
 #endif
   //QP matrices
-  c2qp(A_ct,B_ct_r,setup->dt,setup->horizon);
+  /*（5）计算QP矩阵*/
+  c2qp(A_ct,B_ct_r,setup->dt,setup->horizon);           //计算得到A Bqp矩阵，把上一步求得的两个矩阵带进去得到
 
   //weights
-  Matrix<fpt,13,1> full_weight;
-  for(u8 i = 0; i < 12; i++)
+  /*（6）定义并更新更新权重矩阵*/
+  Matrix<fpt,13,1> full_weight;                         //定义weights权重矩阵
+  for(u8 i = 0; i < 12; i++)                            //更新权重矩阵
     full_weight(i) = update->weights[i];
   full_weight(12) = 0.f;
-  S.diagonal() = full_weight.replicate(setup->horizon,1);
+  S.diagonal() = full_weight.replicate(setup->horizon,1); /*（7）计算L矩阵，S是L矩阵*/  //复制horizon次 3horizon*13horizon
 
   //trajectory
+  /*（8）更新参考轨迹 这一步中所有参考 horizon*/
   for(s16 i = 0; i < setup->horizon; i++)
   {
     for(s16 j = 0; j < 12; j++)
@@ -386,41 +396,47 @@ void solve_mpc(update_data_t* update, problem_setup* setup)
 
 
   //note - I'm not doing the shifting here.
+  /*（9）建立约束不等式*/
   s16 k = 0;
-  for(s16 i = 0; i < setup->horizon; i++)
+  for(s16 i = 0; i < setup->horizon; i++)                         //输入力边界 ，x,y方向力无穷的上边界
   {
-    for(s16 j = 0; j < 4; j++)
+    for(s16 j = 0; j < 4; j++)                                    //4条腿上分别是5条约束不等式的上边界
     {
-      U_b(5*k + 0) = BIG_NUMBER;
-      U_b(5*k + 1) = BIG_NUMBER;
-      U_b(5*k + 2) = BIG_NUMBER;
-      U_b(5*k + 3) = BIG_NUMBER;
-      U_b(5*k + 4) = update->gait[i*4 + j] * setup->f_max;
+      U_b(5*k + 0) = BIG_NUMBER;                                  //x
+      U_b(5*k + 1) = BIG_NUMBER;                                  //x
+      U_b(5*k + 2) = BIG_NUMBER;                                  //y
+      U_b(5*k + 3) = BIG_NUMBER;                                  //y，值可以很大，看成是一个无穷大的值
+      U_b(5*k + 4) = update->gait[i*4 + j] * setup->f_max;        //z上的约束，这里的这个值可能会设置的很小，其他四个变量的值都是很大的，这个值悬空是fz的值很变得很小，怎么知道是悬空呐？是根据状态机预测得到的
       k++;
     }
   }
 
 
-
+  /*（10）添加摩擦约束Fix=mu/*Fiz 式（22）~（24）*/
   fpt mu = 1.f/setup->mu;
-  Matrix<fpt,5,3> f_block;
+  Matrix<fpt,5,3> f_block;                                         //定义一个5*3矩阵块
 
-  f_block <<  mu, 0,  1.f,
+  f_block <<  mu, 0,  1.f,                                         //容器用<<传入数据，构成一个Ci阵
     -mu, 0,  1.f,
     0,  mu, 1.f,
     0, -mu, 1.f,
     0,   0, 1.f;
 
-  for(s16 i = 0; i < setup->horizon*4; i++)
+  /*(11)把约束组合成为约束矩阵*/
+  for(s16 i = 0; i < setup->horizon*4; i++)                         //组合成约束矩阵， 4>=c>=3  才有解
   {
-    fmat.block(i*5,i*3,5,3) = f_block;
+    fmat.block(i*5,i*3,5,3) = f_block;                              //对角阵 size= horizon*20,horizon*12//合成C
   }
 
-  qH = 2*(B_qp.transpose()*S*B_qp + update->alpha*eye_12h);
-  qg = 2*B_qp.transpose()*S*(A_qp*x_0 - X_d);
+  /*(12)计算矩阵H、g式子31、21*/
+  qH = 2*(B_qp.transpose()*S*B_qp + update->alpha*eye_12h);         //式（31）
+  qg = 2*B_qp.transpose()*S*(A_qp*x_0 - X_d);                       //式（32）
 
-  QpProblem<double> jcqp(setup->horizon*12, setup->horizon*20);
-  if(update->use_jcqp == 1) {
+  /*(13)计算二次规划问题（QP）*/ //（1）先定义一个QP问题                  （1）定义一个QP问题
+  QpProblem<double> jcqp(setup->horizon*12, setup->horizon*20);     // P预测中-优化问题解算范畴】二次规划问题（QP）计算方法
+
+  //（2）解法选择 /*使用qp求解器解法*/                                  （2）QP问题解法选择
+  if(update->use_jcqp == 1) {                                       // 这里使用了JCQP第三方库进行QP问题的就求解，具体可以看看JCQP第三方库的使方法
     jcqp.A = fmat.cast<double>();
     jcqp.P = qH.cast<double>();
     jcqp.q = qg.cast<double>();
@@ -434,81 +450,88 @@ void solve_mpc(update_data_t* update, problem_setup* setup)
     jcqp.settings.rho = update->rho;
     jcqp.settings.maxIterations = update->max_iterations;
     jcqp.runFromDense(update->max_iterations, true, false);
-  } else {
+  } else { /*不使用qp求解器解法*/
 
 ///Mod Begin by peibo,zhaoyudong,2021-07-20,optimize the calculation time of MPC algorithm.
-    //my_matrix_to_real(H_qpoases,qH,setup->horizon*12, setup->horizon*12);
-    //my_matrix_to_real(g_qpoases,qg,setup->horizon*12, 1);
-    //my_matrix_to_real(A_qpoases,fmat,setup->horizon*20, setup->horizon*12);
-    //my_matrix_to_real(ub_qpoases,U_b,setup->horizon*20, 1);
+    //my_matrix_to_real(H_qpoases,qH,setup->horizon*12, setup->horizon*12);             //(1)矩阵格式转换成QP求解器能够处理的格式  //式（31）H矩阵  
+    //my_matrix_to_real(g_qpoases,qg,setup->horizon*12, 1);                             //式（32）3*4 = 12 4条腿 每条腿有3个变量，力的3个分量
+    //my_matrix_to_real(A_qpoases,fmat,setup->horizon*20, setup->horizon*12);           //所求量约束矩阵
+    //my_matrix_to_real(ub_qpoases,U_b,setup->horizon*20, 1);                           //约束上边界
 ///Ori Code:
-     matrix_to_real(H_qpoases,qH,setup->horizon*12, setup->horizon*12);
-     matrix_to_real(g_qpoases,qg,setup->horizon*12, 1);
-     matrix_to_real(A_qpoases,fmat,setup->horizon*20, setup->horizon*12);
-     matrix_to_real(ub_qpoases,U_b,setup->horizon*20, 1);
+     matrix_to_real(H_qpoases,qH,setup->horizon*12, setup->horizon*12);                 //(1)矩阵格式转换成QP求解器能够处理的格式  //式（31）H矩阵  
+     matrix_to_real(g_qpoases,qg,setup->horizon*12, 1);                                 //式（32）3*4 = 12 4条腿 每条腿有3个变量，力的3个分量
+     matrix_to_real(A_qpoases,fmat,setup->horizon*20, setup->horizon*12);               //所求量约束矩阵
+     matrix_to_real(ub_qpoases,U_b,setup->horizon*20, 1);                               //约束上边界
 ///Mod End
 
-    for(s16 i = 0; i < 20*setup->horizon; i++)
-      lb_qpoases[i] = 0.0f;
+    for(s16 i = 0; i < 20*setup->horizon; i++)                                          // 每条腿5个约束不等式，4*5 =20 4条腿
+      lb_qpoases[i] = 0.0f;                                                             // 约束下边界
 
-    s16 num_constraints = 20*setup->horizon;
-    s16 num_variables = 12*setup->horizon;
-
-
-    qpOASES::int_t nWSR = 100;
+    //（2）处理约束问题
+    s16 num_constraints = 20*setup->horizon;                                            // 约束数量
+    s16 num_variables = 12*setup->horizon;                                              // 变量数
 
 
-    int new_vars = num_variables;
-    int new_cons = num_constraints;
+    qpOASES::int_t nWSR = 100;                                                          // 指定在初始同伦期间要执行的最大工作集重新计算次数（在输出时它包含实际执行的工作集重新计算的次数！）
 
-    for(int i =0; i < num_constraints; i++)
+
+    int new_vars = num_variables;                                                       // 不悬空变量数
+    int new_cons = num_constraints;                                                     // 不悬空约束数
+
+    //（3）清空，准备简化QP矩阵
+    for(int i =0; i < num_constraints; i++)                                             // 把上一次存的数据清零
       con_elim[i] = 0;
 
-    for(int i = 0; i < num_variables; i++)
+    for(int i = 0; i < num_variables; i++)                                              // 变量数
       var_elim[i] = 0;
 
 
-    for(int i = 0; i < num_constraints; i++)
+    for(int i = 0; i < num_constraints; i++)                                            // 约束数
     {
-      if(! (near_zero(lb_qpoases[i]) && near_zero(ub_qpoases[i]))) continue;
-      double* c_row = &A_qpoases[i*num_variables];
-      for(int j = 0; j < num_variables; j++)
+      // 遍历所有约束上下边界 如果边界值都在0附近，就操作赋值，否则跳过 即操作悬空腿
+      if(! (near_zero(lb_qpoases[i]) && near_zero(ub_qpoases[i]))) continue;            // 上下限    
+      double* c_row = &A_qpoases[i*num_variables];                                      // 边界值都在0附近找到其对应的约束矩阵的行  //取地址，放到指针变量中
+
+      // 把悬空足给找出来，悬空足的Fz方向的maxf很小
+      for(int j = 0; j < num_variables; j++)                                            // 遍历这一行的约束，因为一行包含了变量数，所以这里j最大数就是变量个数
       {
-        if(near_one(c_row[j]))
+        if(near_one(c_row[j]))                                                          // 如果约束参数接近1 即悬空足fz对应的约束，C约束阵 ，前面把把接近0的约束的数，在C阵中找到对应的约束值保存起来，这里如果约束值接近于1
         {
-          new_vars -= 3;
-          new_cons -= 5;
-          int cs = (j*5)/3 -3;
-          var_elim[j-2] = 1;
+          new_vars -= 3;                                                                // 变量数-3	需要规划的三维足力少一组 ，力是3个维度的，分x,  y ,z三个方向
+          new_cons -= 5;                                                                // 约束数-5	即悬空足所有约束无效 ，5条约束不等式
+          int cs = (j*5)/3 -3;                                                          // 找到悬空约束数的起始位置   //j*5是表示用变量数*5，之后/3是取整，这样就得到了对应的约束不等式，-3
+          var_elim[j-2] = 1;                                                            // 将悬空的置1，将悬空足的3个变量，即3个力的分量全部置1
           var_elim[j-1] = 1;
           var_elim[j  ] = 1;
           con_elim[cs] = 1;
-          con_elim[cs+1] = 1;
+          con_elim[cs+1] = 1;                                                           // 将悬空的置1
           con_elim[cs+2] = 1;
           con_elim[cs+3] = 1;
           con_elim[cs+4] = 1;
         }
       }
     }
+
+    //（4）移动中应用mpc算力  //要计算的是不悬空触地脚的力，移动中总有悬空的腿，力有三个分力，分别对应x,y,z，每条腿对应5个约束不等式
     //if(new_vars != num_variables)
-    if(true)
+    if(true)                                                                            //意思就是不是完全站立，而是有悬空的腿出现的状态
     {
-      int var_ind[new_vars];
+      int var_ind[new_vars];                                                            //除去所有悬空腿后的支撑腿力 //储存不悬空足力序号
       int con_ind[new_cons];
       int vc = 0;
-      for(int i = 0; i < num_variables; i++)
+      for(int i = 0; i < num_variables; i++)                                            //12*horizon
       {
-        if(!var_elim[i])
+        if(!var_elim[i])                                                                //如果为0 就是不悬空
         {
           if(!(vc<new_vars))
           {
             printf("BAD ERROR 1\n");
           }
-          var_ind[vc] = i;
+          var_ind[vc] = i;                                                              //储存不悬空足力序号//把不悬空的足力序号保存在这个数组中，这个数组上面新建的
           vc++;
         }
       }
-      vc = 0;
+      vc = 0;                                                                           //结束后置零
       for(int i = 0; i < num_constraints; i++)
       {
         if(!con_elim[i])
@@ -517,39 +540,40 @@ void solve_mpc(update_data_t* update, problem_setup* setup)
           {
             printf("BAD ERROR 1\n");
           }
-          con_ind[vc] = i;
+          con_ind[vc] = i;                                                            //储存不悬空足约束序号
           vc++;
         }
       }
-      for(int i = 0; i < new_vars; i++)
+      for(int i = 0; i < new_vars; i++)                                               //不悬空变量数，new_vars是去除了悬空变量数之后的不悬空变量数
       {
-        int olda = var_ind[i];
-        g_red[i] = g_qpoases[olda];
-        for(int j = 0; j < new_vars; j++)
+        int olda = var_ind[i];                                                        //把不悬空的变量数一个一个取出来
+        g_red[i] = g_qpoases[olda];                                                   //不悬空足力序号来组成新的Qp问题梯度向量G，所以g_red[]是一个新的g
+        for(int j = 0; j < new_vars; j++)                                             //不悬空足力序号来组成新的Qp问题（半）正定矩阵H 
         {
-          int oldb = var_ind[j];
-          H_red[i*new_vars + j] = H_qpoases[olda*num_variables + oldb];
+          int oldb = var_ind[j];                                                      //12*horizon，12*horizon 但是不一定全用 下面同样
+          H_red[i*new_vars + j] = H_qpoases[olda*num_variables + oldb];               //不悬空足力序号来组成新的Qp问题（半）正定矩阵H
         }
       }
 
+      //同理如上 定义新约束矩阵
       for (int con = 0; con < new_cons; con++)
       {
         for(int st = 0; st < new_vars; st++)
         {
           float cval = A_qpoases[(num_variables*con_ind[con]) + var_ind[st] ];
-          A_red[con*new_vars + st] = cval;
+          A_red[con*new_vars + st] = cval;                                            //新的C矩阵
         }
       }
-      for(int i = 0; i < new_cons; i++)
+      for(int i = 0; i < new_cons; i++)                                               //同理如上 定义新约束上下边界
       {
         int old = con_ind[i];
         ub_red[i] = ub_qpoases[old];
-        lb_red[i] = lb_qpoases[old];
+        lb_red[i] = lb_qpoases[old];                                                  //新的上下边界约束
       }
 
-      if(update->use_jcqp == 0) {
-        Timer solve_timer;
-        qpOASES::QProblem problem_red (new_vars, new_cons);
+      if(update->use_jcqp == 0) {                                                     /*不使用jcqp解法*/
+        Timer solve_timer;                                                            //设置qp问题 https://blog.csdn.net/weixin_40709533/article/details/86064148
+        qpOASES::QProblem problem_red (new_vars, new_cons);                           //创建了一个problem_red的类
         qpOASES::Options op;
         op.setToMPC();
         op.printLevel = qpOASES::PL_NONE;
@@ -557,29 +581,35 @@ void solve_mpc(update_data_t* update, problem_setup* setup)
         //int_t nWSR = 50000;
 
 
+        //函数init会返回一个状态代码（类型为returnValue），表示初始化是否成功。可能的值是：
+	      //SUCCESSFUL_RETURN ：初始化成功（包括第一个QP的求解）。
+	      //RET_MAX_NWSR_REACHED：在给定的工作集重新计算数量内无法解决初始QP。
+	      //RET_INIT_FAILED（或更详细的错误代码）：初始化失败。
         int rval = problem_red.init(H_red, g_red, A_red, NULL, NULL, lb_red, ub_red, nWSR);
         (void)rval;
-        int rval2 = problem_red.getPrimalSolution(q_red);
-        if(rval2 != qpOASES::SUCCESSFUL_RETURN)
+        //将最优原始解向量（dimension：nV）写入数组vq_red，该数组必须由用户分配（和释放）
+        //会返回状态 ，如上
+        int rval2 = problem_red.getPrimalSolution(q_red);                             //求解后的结果会保存再q_red这个变量中
+        if(rval2 != qpOASES::SUCCESSFUL_RETURN)                                       //输出求解状态  //如果返回这个值，说明解算成功
           printf("failed to solve!\n");
 
         // printf("solve time: %.3f ms, size %d, %d\n", solve_timer.getMs(), new_vars, new_cons);
 
-
+        //按格式处理输出量
         vc = 0;
         for(int i = 0; i < num_variables; i++)
         {
           if(var_elim[i])
           {
-            q_soln[i] = 0.0f;
+            q_soln[i] = 0.0f;                                                         //输出悬空足力为零
           }
           else
           {
-            q_soln[i] = q_red[vc];
+            q_soln[i] = q_red[vc];                                                    //输出足力
             vc++;
           }
         }
-      } else { // use jcqp == 2
+      } else { // use jcqp == 2                                                       /*使用jcqp解法*/
         QpProblem<double> reducedProblem(new_vars, new_cons);
 
         reducedProblem.A = DenseMatrix<double>(new_cons, new_vars);
@@ -647,7 +677,7 @@ void solve_mpc(update_data_t* update, problem_setup* setup)
 
 
 
-
+  //输出计算的到的足端反作用力
   if(update->use_jcqp == 1) {
     for(int i = 0; i < 12 * setup->horizon; i++) {
       q_soln[i] = jcqp.getSolution()[i];

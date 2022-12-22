@@ -16,16 +16,16 @@
  * @param _controlFSMData holds all of the relevant control data
  */
 template <typename T>
-FSM_State_Vision<T>::FSM_State_Vision(ControlFSMData<T>* _controlFSMData, 
-	FSM_StateName stateNameIn, const std::string &stateStringIn)
-    : FSM_State<T>(_controlFSMData, stateNameIn, stateStringIn),
+FSM_State_Vision<T>::FSM_State_Vision(
+    ControlFSMData<T>* _controlFSMData)
+    : FSM_State<T>(_controlFSMData, FSM_StateName::VISION, "VISION"),
         vision_MPC(_controlFSMData->controlParameters->controller_dt,
                 30 / (1000. * _controlFSMData->controlParameters->controller_dt),
                 _controlFSMData->userParameters),
         cMPCOld(_controlFSMData->controlParameters->controller_dt,
                 30 / (1000. * _controlFSMData->controlParameters->controller_dt),
                 _controlFSMData->userParameters),
-         _visionLCM(getLcmUrl(255))
+         _visionLCM(getLcmUrl(0))
 {
   // Set the safety checks
   this->turnOnAllSafetyChecks();
@@ -93,7 +93,7 @@ void FSM_State_Vision<T>::handleIndexmapLCM(const lcm::ReceiveBuffer *rbuf,
 
 
 template <typename T>
-BT::NodeStatus FSM_State_Vision<T>::onStart() {
+void FSM_State_Vision<T>::onEnter() {
   // Default is to not transition
   this->nextStateName = this->stateName;
 
@@ -110,14 +110,14 @@ BT::NodeStatus FSM_State_Vision<T>::onStart() {
     _ini_body_ori_rpy = (this->_data->_stateEstimator->getResult()).rpy;
   }
   QUADRUPED_INFO(_logger, "On Enter");
-  return BT::NodeStatus::RUNNING;
+  this->transitionErrorMode = 0;
 }
 
 /**
  * Calls the functions to be executed on each control loop iteration.
  */
 template <typename T>
-BT::NodeStatus FSM_State_Vision<T>::onRunning() {
+void FSM_State_Vision<T>::run() {
   if(_b_localization_data){
     _updateStateEstimator();
   }
@@ -136,8 +136,6 @@ BT::NodeStatus FSM_State_Vision<T>::onRunning() {
   // Stand still
   //_JPosStand(); 
   _Visualization(des_vel);
-
-  return BT::NodeStatus::RUNNING;
 }
 
 template <typename T>
@@ -356,6 +354,15 @@ FSM_StateName FSM_State_Vision<T>::checkTransition() {
 
       break;
 
+    case K_DAMP:
+      // Requested change to BALANCE_STAND
+      this->nextStateName = FSM_StateName::DAMP;
+
+      // Transition time is immediate
+      this->transitionDuration = 0.0;
+
+      break;
+
     case K_RECOVERY_STAND:
       this->nextStateName = FSM_StateName::RECOVERY_STAND;
       this->transitionDuration = 0.;
@@ -404,6 +411,11 @@ TransitionData<T> FSM_State_Vision<T>::transition() {
 
       break;
 
+    case FSM_StateName::DAMP:
+      this->turnOffAllSafetyChecks();
+      this->transitionData.done = true;
+      break;
+
     case FSM_StateName::RECOVERY_STAND:
       this->transitionData.done = true;
       break;
@@ -425,7 +437,7 @@ TransitionData<T> FSM_State_Vision<T>::transition() {
  * Cleans up the state information on exiting the state.
  */
 template <typename T>
-void FSM_State_Vision<T>::onHalted() {
+void FSM_State_Vision<T>::onExit() {
   // Nothing to clean up when exiting
   iter = 0;
 }

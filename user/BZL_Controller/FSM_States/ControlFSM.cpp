@@ -28,10 +28,11 @@ ControlFSM<T>::ControlFSM(Quadruped<T>* _quadruped,
                           DesiredStateCommand<T>* _desiredStateCommand,
                           RobotControlParameters* controlParameters,
                           VisualizationData* visualizationData,
-                          BZL_UserParameters* userParameters,
+                          BZL_UserParameters* userParameters,                          
                           /// Add Begin by wuchunming, 20210716, add serialport pressure sensor
-                          itas109::SensorData* sensorData_,/// Add End
-             		  const BT::NodeConfiguration& config) : BZL::SwitchNode("switch_node", config),_logger("ControlFSM")
+                          itas109::SensorData* sensorData_
+                          /// Add End
+                          ): _logger("ControlFSM")
 {
   // Add the pointers to the ControlFSMData struct
   data._quadruped = _quadruped;
@@ -48,9 +49,9 @@ ControlFSM<T>::ControlFSM(Quadruped<T>* _quadruped,
   /// Add End
 
   // Initialize and add all of the FSM States to the state list
-/*
   statesList.invalid = nullptr;
   statesList.passive = new FSM_State_Passive<T>(&data);
+  statesList.damp = new FSM_State_Damp<T>(&data);
   statesList.jointPD = new FSM_State_JointPD<T>(&data);
   statesList.impedanceControl = new FSM_State_ImpedanceControl<T>(&data);
   statesList.standUp = new FSM_State_StandUp<T>(&data);
@@ -60,87 +61,46 @@ ControlFSM<T>::ControlFSM(Quadruped<T>* _quadruped,
   statesList.vision = new FSM_State_Vision<T>(&data);
   statesList.backflip = new FSM_State_BackFlip<T>(&data);
   statesList.frontJump = new FSM_State_FrontJump<T>(&data);
-*/
 
   /// Add Begin by peibo  2021-03-01, add prone mode
-  //statesList.prone = new FSM_State_Prone<T>(&data);
+  statesList.prone = new FSM_State_Prone<T>(&data);
   /// Add End 
 
-  safetyChecker = new SafetyChecker<T>(&data, "safety_checker");
+  safetyChecker = new SafetyChecker<T>(&data);
 
   // Initialize the FSM with the Passive FSM State
-  // initialize();
-
-  standup_          = new FSM_State_StandUp<T>(&data, FSM_StateName::STAND_UP,                   std::to_string(BZL::STAND_UP         ));
-  balancestand_     = new FSM_State_BalanceStand<T>(&data, FSM_StateName::BALANCE_STAND,         std::to_string(BZL::BALANCE_STAND    ));
-  recoverystand_    = new FSM_State_RecoveryStand<T>(&data, FSM_StateName::RECOVERY_STAND,       std::to_string(BZL::RECOVERY_STAND   ));
-  prone_            = new FSM_State_Prone<T>(&data, FSM_StateName::PRONE,                        std::to_string(BZL::PRONE            ));
-  locomotion_       = new FSM_State_Locomotion<T>(&data, FSM_StateName::LOCOMOTION,              std::to_string(BZL::LOCOMOTION       ));
-  backflip_         = new FSM_State_BackFlip<T>(&data, FSM_StateName::BACKFLIP,                  std::to_string(BZL::BACKFLIP         ));
-  frontjump_        = new FSM_State_FrontJump<T>(&data, FSM_StateName::FRONTJUMP,                std::to_string(BZL::FRONTJUMP        ));
-  vision_           = new FSM_State_Vision<T>(&data, FSM_StateName::VISION,                      std::to_string(BZL::VISION           ));
-  jointpd_          = new FSM_State_JointPD<T>(&data, FSM_StateName::JOINT_PD,                   std::to_string(BZL::JOINT_PD         ));
-  impedancecontrol_ = new FSM_State_ImpedanceControl<T>(&data, FSM_StateName::IMPEDANCE_CONTROL, std::to_string(BZL::IMPEDANCE_CONTROL));
-  passive_          = new FSM_State_Passive<T>(&data, FSM_StateName::PASSIVE,                    std::to_string(BZL::PASSIVE));
-
-  states_.at(BZL::STAND_UP         )->addChild(safetyChecker    );
-  states_.at(BZL::STAND_UP         )->addChild(standup_         );
-  states_.at(BZL::BALANCE_STAND    )->addChild(balancestand_    );
-  states_.at(BZL::RECOVERY_STAND   )->addChild(recoverystand_   );
-  states_.at(BZL::PRONE            )->addChild(prone_           );
-  states_.at(BZL::LOCOMOTION       )->addChild(locomotion_      );
-  states_.at(BZL::BACKFLIP         )->addChild(backflip_        );
-  states_.at(BZL::FRONTJUMP        )->addChild(frontjump_       );
-  states_.at(BZL::VISION           )->addChild(vision_          );
-  states_.at(BZL::JOINT_PD         )->addChild(jointpd_         );
-  states_.at(BZL::IMPEDANCE_CONTROL)->addChild(impedancecontrol_);
-  states_.at(BZL::PASSIVE          )->addChild(safetyChecker    );
-  states_.at(BZL::PASSIVE          )->addChild(passive_         );
-
-}
-
-template <typename T>
-ControlFSM<T>::~ControlFSM(){
-  delete standup_          ;
-  delete balancestand_     ;
-  delete recoverystand_    ;
-  delete prone_            ;
-  delete locomotion_       ;
-  delete backflip_         ;
-  delete frontjump_        ;
-  delete vision_           ;
-  delete jointpd_          ;
-  delete impedancecontrol_ ;
-  delete passive_          ;
-  delete safetyChecker     ;
+  initialize();
 }
 
 /**
  * Initialize the Control FSM with the default settings. SHould be set to
  * Passive state and Normal operation mode.
  */
-//template <typename T>
-//void ControlFSM<T>::initialize() {
+template <typename T>
+void ControlFSM<T>::initialize() {
   // Initialize a new FSM State with the control data
-//  currentState = statesList.passive;
+  currentState = statesList.passive;
 
   // Enter the new current state cleanly
-//  currentState->onEnter();
+  currentState->onEnter();
 
   // Initialize to not be in transition
-//  nextState = currentState;
+  nextState = currentState;
 
   // Initialize FSM mode to normal operation
-//  operatingMode = FSM_OperatingMode::NORMAL;
-//}
+  operatingMode = FSM_OperatingMode::NORMAL;
+  q_start_des << -0.6f, 0.6f, -0.6f, 0.6f,-1.0f, -1.0f, -1.0f, -1.0f,2.7f, 2.7f, 2.7f, 2.7f;
+  offset_err << 0.15f,0.20f,0.15f;
+
+}
 
 /**
  * Called each control loop iteration. Decides if the robot is safe to
  * run controls and checks the current state for any transitions. Runs
  * the regular state behavior if all is normal.
  */
-//template <typename T>
-//void ControlFSM<T>::runFSM() {
+template <typename T>
+void ControlFSM<T>::runFSM() {
   // Publish state estimator data to other computer
   //for(size_t i(0); i<3; ++i){
     //_state_estimator.p[i] = data._stateEstimator->getResult().position[i];
@@ -150,148 +110,181 @@ ControlFSM<T>::~ControlFSM(){
   //state_estimator_lcm.publish("state_estimator_ctrl_pc", &_state_estimator);
 
   // Check the robot state for safe operation
-//  operatingMode = safetyPreCheck();
+  operatingMode = safetyPreCheck();
 
   /// Add Begin by peibo, 2021-09-06, add handle tasks are not processed when adding automatic tasks
-//  if(_FSM_Task_Manager.getUseGamepad() == false)
-//  {
-//    data._desiredStateCommand->data.stateDes.setZero();
-//    data._desiredStateCommand->data.pre_stateDes.setZero();
-//    data._desiredStateCommand->leftAnalogStick.setZero();
-//    data._desiredStateCommand->rightAnalogStick.setZero();
-//  }
+  if(_FSM_Task_Manager.getUseGamepad() == false)
+  {
+    data._desiredStateCommand->data.stateDes.setZero();
+    data._desiredStateCommand->data.pre_stateDes.setZero();
+    data._desiredStateCommand->leftAnalogStick.setZero();
+    data._desiredStateCommand->rightAnalogStick.setZero();
+  }
   /// Add End
 
-//  if(data.controlParameters->use_rc){
-//    int rc_mode = data._desiredStateCommand->rcCommand->mode;
-//    if(rc_mode == RC_mode::RECOVERY_STAND){
-//      data.controlParameters->control_mode = K_RECOVERY_STAND;
+  if(data.controlParameters->use_rc){
+    int rc_mode = data._desiredStateCommand->rcCommand->mode;
+    if(rc_mode == RC_mode::RECOVERY_STAND){
+      data.controlParameters->control_mode = K_RECOVERY_STAND;
 
-//    } else if(rc_mode == RC_mode::LOCOMOTION){
-//      data.controlParameters->control_mode = K_LOCOMOTION;
+    } else if(rc_mode == RC_mode::LOCOMOTION){
+      data.controlParameters->control_mode = K_LOCOMOTION;
 
-//    } else if(rc_mode == RC_mode::QP_STAND){
-//      data.controlParameters->control_mode = K_BALANCE_STAND;
+    } else if(rc_mode == RC_mode::QP_STAND){
+      data.controlParameters->control_mode = K_BALANCE_STAND;
 
-//    } else if(rc_mode == RC_mode::VISION){
-//      data.controlParameters->control_mode = K_VISION;
+    } else if(rc_mode == RC_mode::VISION){
+      data.controlParameters->control_mode = K_VISION;
 
-//    } else if(rc_mode == RC_mode::BACKFLIP || rc_mode == RC_mode::BACKFLIP_PRE){
-//      data.controlParameters->control_mode = K_BACKFLIP;
-//   }
+    } else if(rc_mode == RC_mode::BACKFLIP || rc_mode == RC_mode::BACKFLIP_PRE){
+      data.controlParameters->control_mode = K_BACKFLIP;
+   }
       //data.controlParameters->control_mode = K_FRONTJUMP;
     //std::cout<< "control mode: "<<data.controlParameters->control_mode<<std::endl;
-//  }
+  }
 
   /// Add Begin by peibo, 2021-01-21, add handle gamepadCommand control support code
-//  else{
-//    int rc_mode = data._desiredStateCommand->rcCommand->mode;
-//    if(rc_mode == RC_mode::STAND_UP){
-//      data.controlParameters->control_mode = K_STAND_UP;
+  else{
+    int rc_mode = data._desiredStateCommand->rcCommand->mode;
+    if(rc_mode == RC_mode::STAND_UP){
+      data.controlParameters->control_mode = K_STAND_UP;
 
-//    }
-//    else if(rc_mode == RC_mode::RECOVERY_STAND){
-//      data.controlParameters->control_mode = K_RECOVERY_STAND;
+    }
+    else if(rc_mode == RC_mode::RECOVERY_STAND){
+      data.controlParameters->control_mode = K_RECOVERY_STAND;
 
-//    } else if(rc_mode == RC_mode::LOCOMOTION){
-//      data.controlParameters->control_mode = K_LOCOMOTION;
+    } else if(rc_mode == RC_mode::LOCOMOTION){
+      data.controlParameters->control_mode = K_LOCOMOTION;
 
-//    } else if(rc_mode == RC_mode::QP_STAND){
-//      data.controlParameters->control_mode = K_BALANCE_STAND;
+    } else if(rc_mode == RC_mode::QP_STAND){
+      data.controlParameters->control_mode = K_BALANCE_STAND;
 
-//    } else if(rc_mode == RC_mode::VISION){
-//      data.controlParameters->control_mode = K_VISION;
+    } else if(rc_mode == RC_mode::VISION){
+      data.controlParameters->control_mode = K_VISION;
 
-//    } else if(rc_mode == RC_mode::BACKFLIP || rc_mode == RC_mode::BACKFLIP_PRE){
-//      data.controlParameters->control_mode = K_BACKFLIP;
+    } else if(rc_mode == RC_mode::BACKFLIP || rc_mode == RC_mode::BACKFLIP_PRE){
+      data.controlParameters->control_mode = K_BACKFLIP;
 
-//    } else if(rc_mode == RC_mode::PRONE){
-//      data.controlParameters->control_mode = K_PRONE;
-//    }
-//  }
+    } else if(rc_mode == RC_mode::PRONE){
+      data.controlParameters->control_mode = K_PRONE;
+    }
+      else if(rc_mode == RC_mode::DAMP){
+      data.controlParameters->control_mode = K_DAMP;
+    }
+  }
   /// Add End
 
   // Run the robot control code if operating mode is not unsafe
-//  if (operatingMode != FSM_OperatingMode::ESTOP) {
+  if (operatingMode != FSM_OperatingMode::ESTOP) {
     // Run normal controls if no transition is detected
-//    if (operatingMode == FSM_OperatingMode::NORMAL) {
+    if (operatingMode == FSM_OperatingMode::NORMAL) {
       // Check the current state for any transition
       /// Mod Begin by peibo, 2021-08-04, add FSM_Task_Manager
-//      if(isUseFSMTaskManager)
-//      {
-//        nextStateName = _FSM_Task_Manager.run(currentState->stateName,&data.controlParameters->control_mode);
-//        currentState->nextStateName = nextStateName;
-//      }
-//      else
-//      {
-//        nextStateName = currentState->checkTransition();
-//      }
+      if(isUseFSMTaskManager)
+      {
+        nextStateName = _FSM_Task_Manager.run(currentState->stateName,&data.controlParameters->control_mode);
+        currentState->nextStateName = nextStateName;
+      }
+      else
+      {
+        nextStateName = currentState->checkTransition();
+      }
       /// Ori Code:
       //nextStateName = currentState->checkTransition();
       /// Mod End
 
       // Detect a commanded transition
-//      if (nextStateName != currentState->stateName) {
+      if (nextStateName != currentState->stateName) {
         // Set the FSM operating mode to transitioning
-//        operatingMode = FSM_OperatingMode::TRANSITIONING;
+        operatingMode = FSM_OperatingMode::TRANSITIONING;
 
         // Get the next FSM State by name
-//        nextState = getNextState(nextStateName);
+        nextState = getNextState(nextStateName);
 
         // Print transition initialized info
         //printInfo(1);
 
-//      } else {
+      } else {
         // Run the iteration for the current state normally
-//        currentState->run();
-//      }
-//    }
+        currentState->run();
+      }
+    }
 
     // Run the transition code while transition is occuring
-//    if (operatingMode == FSM_OperatingMode::TRANSITIONING) {
-//      transitionData = currentState->transition();
+    if (operatingMode == FSM_OperatingMode::TRANSITIONING) {
+      transitionData = currentState->transition();
 
       // Check the robot state for safe operation
-//      safetyPostCheck();
+      safetyPostCheck();
 
       // Run the state transition
-//      if (transitionData.done) {
+      if (transitionData.done) {
         // Exit the current state cleanly
-//        currentState->onExit();
+        currentState->onExit();
 
         // Print finalizing transition info
         //printInfo(2);
 
         // Complete the transition
-//        currentState = nextState;
+        currentState = nextState;
 
         // Enter the new current state cleanly
-//        currentState->onEnter();
+        currentState->onEnter();
 
         /// Add Begin by peibo, 2021-06-03,repair: when you enter the recovery standing mode, the body will shake
-//        currentState->run();
+        currentState->run();
         /// Add End
 
         // Return the FSM to normal operation mode
-//        operatingMode = FSM_OperatingMode::NORMAL;
-//      }
-//    } else {
+        operatingMode = FSM_OperatingMode::NORMAL;
+      }
+    } else {
       // Check the robot state for safe operation
-//      safetyPostCheck();
-//    }
+      safetyPostCheck();
+    }
 
-//  } else { // if ESTOP
-//    currentState = statesList.passive;
-//    currentState->onEnter();
-//    nextStateName = currentState->stateName;
-//  }
+  } else { // if ESTOP
+    data.controlParameters->control_mode=K_DAMP;
+    nextState = statesList.damp;
+    nextStateName=nextState->stateName;
+
+    if (nextStateName != currentState->stateName) {
+        data._desiredStateCommand->rcCommand->mode = RC_mode::DAMP;
+        currentState->onExit();
+        currentState = nextState;
+        currentState->onEnter();
+        currentState->run();
+    }else
+    {
+      currentState->run();
+      bool recovery=true;
+      for (size_t leg = 0; leg < 4; leg++)
+      {
+        for (size_t j = 0; j < 3; j++)
+        {
+          if (abs(q_start_des(j,leg)-data._legController->datas[leg].q(j))>=offset_err(j))
+          {
+            recovery=false;
+            data._desiredStateCommand->rcCommand->mode = RC_mode::DAMP;
+          }
+          
+        }
+      }
+      if ((recovery)&&(data._desiredStateCommand->rcCommand->mode ==RC_mode::RECOVERY_STAND))
+      {
+        operatingMode = FSM_OperatingMode::NORMAL;
+      }
+      
+    }
+   }
 
   // Print the current state of the FSM
-//  printInfo(0);
+  printInfo(0);
 
+  JointPosCheck( currentState->stateName);
   // Increase the iteration counter
-//  iter++;
-//}
+  iter++;
+}
 
 /**
  * Checks the robot state for safe operation conditions. If it is in
@@ -300,19 +293,19 @@ ControlFSM<T>::~ControlFSM(){
  *
  * @return the appropriate operating mode
  */
-//template <typename T>
-//FSM_OperatingMode ControlFSM<T>::safetyPreCheck() {
+template <typename T>
+FSM_OperatingMode ControlFSM<T>::safetyPreCheck() {
   // Check for safe orientation if the current state requires it
-//  if (currentState->checkSafeOrientation && data.controlParameters->control_mode != K_RECOVERY_STAND) {
-//    if (!safetyChecker->checkSafeOrientation()) {
-//      operatingMode = FSM_OperatingMode::ESTOP;
-//      std::cout << "broken: Orientation Safety Ceck FAIL" << std::endl;
-//    }
-//  }
+  if (currentState->checkSafeOrientation && data.controlParameters->control_mode != K_RECOVERY_STAND) {
+    if (!safetyChecker->checkSafeOrientation()) {
+      operatingMode = FSM_OperatingMode::ESTOP;
+      QUADRUPED_ERROR(_logger, "broken: Orientation Safety Ceck FAIL");
+    }
+  }
 
   // Default is to return the current operating mode
-//  return operatingMode;
-//}
+  return operatingMode;
+}
 
 /**
  * Checks the robot state for safe operation commands after calculating the
@@ -324,21 +317,21 @@ ControlFSM<T>::~ControlFSM(){
  *
  * @return the appropriate operating mode
  */
-//template <typename T>
-//FSM_OperatingMode ControlFSM<T>::safetyPostCheck() {
+template <typename T>
+FSM_OperatingMode ControlFSM<T>::safetyPostCheck() {
   // Check for safe desired foot positions
-//  if (currentState->checkPDesFoot) {
-//    safetyChecker->checkPDesFoot();
-//  }
+  if (currentState->checkPDesFoot) {
+    safetyChecker->checkPDesFoot();
+  }
 
   // Check for safe desired feedforward forces
-//  if (currentState->checkForceFeedForward) {
-//    safetyChecker->checkForceFeedForward();
-//  }
+  if (currentState->checkForceFeedForward) {
+    safetyChecker->checkForceFeedForward();
+  }
 
   // Default is to return the current operating mode
-//  return operatingMode;
-//}
+  return operatingMode;
+}
 
 /**
  * Returns the approptiate next FSM State when commanded.
@@ -346,52 +339,55 @@ ControlFSM<T>::~ControlFSM(){
  * @param  next commanded enumerated state name
  * @return next FSM state
  */
-//template <typename T>
-//FSM_State<T>* ControlFSM<T>::getNextState(FSM_StateName stateName) {
+template <typename T>
+FSM_State<T>* ControlFSM<T>::getNextState(FSM_StateName stateName) {
   // Choose the correct FSM State by enumerated state name
-//  switch (stateName) {
-//    case FSM_StateName::INVALID:
-//      return statesList.invalid;
+  switch (stateName) {
+    case FSM_StateName::INVALID:
+      return statesList.invalid;
 
-//    case FSM_StateName::PASSIVE:
-//      return statesList.passive;
+    case FSM_StateName::PASSIVE:
+      return statesList.passive;
 
-//    case FSM_StateName::JOINT_PD:
-//      return statesList.jointPD;
+    case FSM_StateName::JOINT_PD:
+      return statesList.jointPD;
 
-//    case FSM_StateName::IMPEDANCE_CONTROL:
-//      return statesList.impedanceControl;
+    case FSM_StateName::IMPEDANCE_CONTROL:
+      return statesList.impedanceControl;
 
-//    case FSM_StateName::STAND_UP:
-//      return statesList.standUp;
+    case FSM_StateName::STAND_UP:
+      return statesList.standUp;
 
-//    case FSM_StateName::BALANCE_STAND:
-//      return statesList.balanceStand;
+    case FSM_StateName::BALANCE_STAND:
+      return statesList.balanceStand;
 
-//    case FSM_StateName::LOCOMOTION:
-//      return statesList.locomotion;
+    case FSM_StateName::LOCOMOTION:
+      return statesList.locomotion;
 
-//    case FSM_StateName::RECOVERY_STAND:
-//      return statesList.recoveryStand;
+    case FSM_StateName::RECOVERY_STAND:
+      return statesList.recoveryStand;
 
-//    case FSM_StateName::VISION:
-//      return statesList.vision;
+    case FSM_StateName::DAMP:
+      return statesList.damp;
 
-//    case FSM_StateName::BACKFLIP:
-//      return statesList.backflip;
+    case FSM_StateName::VISION:
+      return statesList.vision;
 
-//   case FSM_StateName::FRONTJUMP:
-//      return statesList.frontJump;
+    case FSM_StateName::BACKFLIP:
+      return statesList.backflip;
+
+    case FSM_StateName::FRONTJUMP:
+      return statesList.frontJump;
 
     /// Add Begin by  peibo  2021-03-01, add prone mode
-//    case FSM_StateName::PRONE:
-//      return statesList.prone;
+    case FSM_StateName::PRONE:
+      return statesList.prone;
     /// Add End
 
-//    default:
-//      return statesList.invalid;
-//  }
-//}
+    default:
+      return statesList.invalid;
+  }
+}
 
 /**
  * Prints Control FSM info at regular intervals and on important events
@@ -400,63 +396,252 @@ ControlFSM<T>::~ControlFSM(){
  *
  * @param printing mode option for regular or an event
  */
-//template <typename T>
-//void ControlFSM<T>::printInfo(int opt) {
-//  switch (opt) {
-//    case 0:  // Normal printing case at regular intervals
+template <typename T>
+void ControlFSM<T>::printInfo(int opt) {
+  switch (opt) {
+    case 0:  // Normal printing case at regular intervals
       // Increment printing iteration
-//      printIter++;
+      printIter++;
 
       // Print at commanded frequency
-//      if (printIter == printNum) {
-//        std::cout << "[CONTROL FSM] Printing FSM Info...\n";
-//        std::cout
-//            << "---------------------------------------------------------\n";
-//        std::cout << "Iteration: " << iter << "\n";
-//        if (operatingMode == FSM_OperatingMode::NORMAL) {
-//          std::cout << "Operating Mode: NORMAL in " << currentState->stateString
-//                    << "\n";
+      if (printIter == printNum) {
+        // std::cout << "[CONTROL FSM] Printing FSM Info...\n";
+        // std::cout
+        //     << "---------------------------------------------------------\n";
+        // std::cout << "Iteration: " << iter << "\n";
+        if (operatingMode == FSM_OperatingMode::NORMAL) {
+          // std::cout << "Operating Mode: NORMAL in " << currentState->stateString
+          //           << "\n";
+          QUADRUPED_INFO(_logger, "Printing FSM Info...\n"
+            "\tIteration: %d\n"
+            "\tOperating Mode: NORMAL in %s\n"
+            "\tGait Type: %s",
+            iter, currentState->stateString.c_str(), data._gaitScheduler->gaitData.gaitName.c_str());
+        } else if (operatingMode == FSM_OperatingMode::TRANSITIONING) {
+          // std::cout << "Operating Mode: TRANSITIONING from "
+          //           << currentState->stateString << " to "
+          //           << nextState->stateString << "\n";
+          QUADRUPED_INFO(_logger, "Printing FSM Info...\n"
+            "\tIteration: %d\n"
+            "\tOperating Mode: TRANSITIONING from %s to %s\n"
+            "\tGait Type: %s",
+            iter, currentState->stateString.c_str(), nextState->stateString.c_str(),
+            data._gaitScheduler->gaitData.gaitName.c_str());
 
-//        } else if (operatingMode == FSM_OperatingMode::TRANSITIONING) {
-//          std::cout << "Operating Mode: TRANSITIONING from "
-//                    << currentState->stateString << " to "
-//                    << nextState->stateString << "\n";
-
-//        } else if (operatingMode == FSM_OperatingMode::ESTOP) {
-//          std::cout << "Operating Mode: ESTOP\n";
-//        }
-//        std::cout << "Gait Type: " << data._gaitScheduler->gaitData.gaitName
-//                  << "\n";
-//        std::cout << std::endl;
+        } else if (operatingMode == FSM_OperatingMode::ESTOP) {
+          // std::cout << "Operating Mode: ESTOP\n";
+          QUADRUPED_INFO(_logger, "Printing FSM Info...\n"
+            "\tIteration: %d\n"
+            "\tOperating Mode: ESTOP"
+            "\tGait Type: %s",
+            iter, data._gaitScheduler->gaitData.gaitName.c_str());
+        }
+        // std::cout << "Gait Type: " << data._gaitScheduler->gaitData.gaitName
+        //           << "\n";
+        // std::cout << std::endl;
 
         // Reset iteration counter
-//        printIter = 0;
-//      }
+        printIter = 0;
+      }
 
       // Print robot info about the robot's status
       // data._gaitScheduler->printGaitInfo();
       // data._desiredStateCommand->printStateCommandInfo();
 
-//      break;
+      break;
 
-//    case 1:  // Initializing FSM State transition
-//      std::cout << "[CONTROL FSM] Transition initialized from "
-//                << currentState->stateString << " to " << nextState->stateString
-//                << "\n"
-//                << std::endl;
+    case 1:  // Initializing FSM State transition
+      // std::cout << "[CONTROL FSM] Transition initialized from "
+      //           << currentState->stateString << " to " << nextState->stateString
+      //           << "\n"
+      //           << std::endl;
 
-//      break;
+      QUADRUPED_INFO(_logger, "Transition initialized from %s to %s",
+        currentState->stateString.c_str(), nextState->stateString.c_str());
 
-//    case 2:  // Finalizing FSM State transition
-//      std::cout << "[CONTROL FSM] Transition finalizing from "
-//                << currentState->stateString << " to " << nextState->stateString
-//                << "\n"
-//                << std::endl;
+      break;
 
-//      break;
-//  }
-//}
+    case 2:  // Finalizing FSM State transition
+      // std::cout << "[CONTROL FSM] Transition finalizing from "
+      //           << currentState->stateString << " to " << nextState->stateString
+      //           << "\n"
+      //           << std::endl;
+      QUADRUPED_INFO(_logger, "Transition finalizing from %s to %s",
+        currentState->stateString.c_str(), nextState->stateString.c_str());
+      break;
+  }
+}
+/*safe check for joint position*/
+template <typename T>
+void ControlFSM<T>::JointPosCheck(FSM_StateName stateName)
+{
+  bool isLocomotion = false;
+  Eigen::Matrix<float, 3, 1> qd_damp_limit_max;
 
+  Eigen::Matrix<float, 3, 1> q_damp_limit_max;
+  Eigen::Matrix<float, 3, 1> q_damp_limit_min;
+  Eigen::Matrix<float, 3, 1> q_soft_limit_max;
+  Eigen::Matrix<float, 3, 1> q_soft_limit_min;
+
+  // setup limit
+#if (USE_LINKAGE_INDUSTRIAL == 1)
+  switch (stateName)
+  {
+  case FSM_StateName::LOCOMOTION:
+    q_damp_limit_max << 0.55, 1.6, 2.7;   // 2.7;
+    q_damp_limit_min << -0.55, -1.9, 0.5; // 0.8;
+    q_soft_limit_max << 0.54, 1.2, 2.6;   // 2.7;
+    q_soft_limit_min << -0.54, -1.6, 0.6; // 0.6;
+    isLocomotion = true;
+    break;
+
+  default:
+    q_damp_limit_max << 0.59, 3.14, 3.0;
+    q_damp_limit_min << -0.59, -3.14, -1;
+    q_soft_limit_max << 1.2, 3.1, 2.8;
+    q_soft_limit_min << -1.2, -3.1, -1;
+    break;
+  }
+  qd_damp_limit_max << 20, 40, 40;
+#elif (USE_LINKAGE == 1)
+  switch (stateName)
+  {
+  case FSM_StateName::LOCOMOTION:
+    q_damp_limit_max << 0.6, 0.6, 2.7;    // 2.7;
+    q_damp_limit_min << -0.6, -1.8, 0.6;  // 0.8;
+    q_soft_limit_max << 0.5, 0.4, 2.6;    // 2.7;
+    q_soft_limit_min << -0.5, -1.65, 0.7; // 0.6;
+    isLocomotion = true;
+    break;
+
+  default:
+    q_damp_limit_max << 1.5, 3.14, 2.85;  // 2.7;
+    q_damp_limit_min << -1.5, -3.14, 0.5; // 0.8;
+    q_soft_limit_max << 1.2, 3.1, 2.8;    // 2.7;
+    q_soft_limit_min << -1.2, -3.1, 0.6;  // 0.6;
+    break;
+  }
+  qd_damp_limit_max << 20, 40, 40;
+#else
+  switch (stateName)
+  {
+  case FSM_StateName::LOCOMOTION:
+    q_damp_limit_max << 0.6, 0.6, 2.7;    // 2.7;
+    q_damp_limit_min << -0.6, -1.8, 0.6;  // 0.8;
+    q_soft_limit_max << 0.5, 0.4, 2.6;    // 2.7;
+    q_soft_limit_min << -0.5, -1.65, 0.7; // 0.6;
+    isLocomotion = true;
+    break;
+
+  default:
+    q_damp_limit_max << 1.5, 3.14, 2.85;  // 2.7;
+    q_damp_limit_min << -1.5, -3.14, 0.5; // 0.8;
+    q_soft_limit_max << 1.2, 3.1, 2.8;    // 2.7;
+    q_soft_limit_min << -1.2, -3.1, 0.6;  // 0.6;
+    break;
+  }
+  qd_damp_limit_max << 20, 40, 40;
+#endif
+
+  //
+
+  float kp_soft_stop = 100;
+  float kd_soft_stop = 0.5;
+
+  for (size_t leg = 1; leg < 3; leg++)
+  {
+    for (size_t j = 0; j < 3; j++)
+    {
+      // qdes limit
+      if (data._legController->commands[leg].qDes(j) > q_soft_limit_max(j))
+      {
+        data._legController->commands[leg].qDes(j) = q_soft_limit_max(j);
+        if (data._legController->commands[leg].qdDes(j) > 0.0)
+        {
+          data._legController->commands[leg].qdDes(j) = 0.0;
+        }
+      }
+      else if (data._legController->commands[leg].qDes(j) < q_soft_limit_min(j))
+      {
+        data._legController->commands[leg].qDes(j) = q_soft_limit_min(j);
+        if (data._legController->commands[leg].qdDes(j) < 0.0)
+        {
+          data._legController->commands[leg].qdDes(j) = 0.0;
+        }
+      }
+      // q limit
+      if (isLocomotion)
+      {
+
+        if (data._legController->datas[leg].q(j) > q_soft_limit_max(j))
+        {
+          data._legController->commands[leg].qDes(j) = (data._legController->commands[leg].qDes(j) < q_soft_limit_max(j) ? data._legController->commands[leg].qDes(j) : q_soft_limit_max(j));
+
+          if (data._legController->datas[leg].qd(j) > 0)
+          {
+            data._legController->commands[leg].qdDes(j) = (data._legController->commands[leg].qdDes(j) < 0.0 ? data._legController->commands[leg].qdDes(j) : 0.0);
+          }
+
+          data._legController->commands[leg].kpCartesian(j, j) = 0.0;
+          data._legController->commands[leg].kdCartesian(j, j) = 0.0;
+          data._legController->commands[leg].kpJoint(j, j) = kp_soft_stop;
+          data._legController->commands[leg].kdJoint(j, j) = kd_soft_stop;
+        }
+        else if (data._legController->datas[leg].q(j) < q_soft_limit_min(j))
+        {
+          data._legController->commands[leg].qDes(j) = (data._legController->commands[leg].qDes(j) > q_soft_limit_min(j) ? data._legController->commands[leg].qDes(j) : q_soft_limit_min(j));
+
+          if (data._legController->datas[leg].qd(j) < 0)
+          {
+            data._legController->commands[leg].qdDes(j) = (data._legController->commands[leg].qdDes(j) > 0.0 ? data._legController->commands[leg].qdDes(j) : 0.0);
+          }
+
+          data._legController->commands[leg].kpCartesian(j, j) = 0.0;
+          data._legController->commands[leg].kdCartesian(j, j) = 0.0;
+          data._legController->commands[leg].kpJoint(j, j) = kp_soft_stop;
+          data._legController->commands[leg].kdJoint(j, j) = kd_soft_stop;
+        }
+      }
+      else // is not locomotion state
+      {
+
+        if (data._legController->datas[leg].q(j) > q_soft_limit_max(j))
+        {
+          data._legController->commands[leg].kpCartesian(j, j) = 0.0;
+          data._legController->commands[leg].kdCartesian(j, j) = 0.0;
+          data._legController->commands[leg].kpJoint(j, j) = 0.0;
+          data._legController->commands[leg].kdJoint(j, j) = kd_soft_stop;
+          data._legController->commands[leg].qdDes(j) = 0.0;
+          data._legController->commands[leg].qDes(j) = 0.0;
+          data._legController->commands[leg].tauFeedForward(j) += kp_soft_stop * (q_soft_limit_max(j) - data._legController->datas[leg].q(j));
+        }
+        else if (data._legController->datas[leg].q(j) < q_soft_limit_min(j))
+        {
+          data._legController->commands[leg].kpCartesian(j, j) = 0.0;
+          data._legController->commands[leg].kdCartesian(j, j) = 0.0;
+          data._legController->commands[leg].kpJoint(j, j) = 0.0;
+          data._legController->commands[leg].kdJoint(j, j) = kd_soft_stop;
+          data._legController->commands[leg].qdDes(j) = 0.0;
+          data._legController->commands[leg].qDes(j) = 0.0;
+          data._legController->commands[leg].tauFeedForward(j) += kp_soft_stop * (q_soft_limit_min(j) - data._legController->datas[leg].q(j));
+        }
+      }
+
+      // damp mode
+
+      if ((data._legController->datas[leg].q(j) > q_damp_limit_max(j)) || (data._legController->datas[leg].q(j) < q_damp_limit_min(j)))
+      {
+        operatingMode = FSM_OperatingMode::ESTOP;
+        std::cout << "Joint Position Check Fail!Leg: " << leg << " Joint: " << j << std::endl;
+      }
+      if (abs(data._legController->datas[leg].qd(j)) > qd_damp_limit_max(j))
+      {
+        operatingMode = FSM_OperatingMode::ESTOP;
+        std::cout << "Joint Velocity Check Fail!Leg: " << leg << " Joint: " << j << std::endl;
+      }
+    }
+  }
+}
 // template class ControlFSM<double>; This should be fixed... need to make
 // RobotRunner a template
 template class ControlFSM<float>;

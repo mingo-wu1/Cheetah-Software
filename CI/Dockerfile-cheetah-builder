@@ -1,0 +1,17 @@
+FROM harbor.saas.bzlrobot-ift.com/cheetah/cheetah_ubuntu:20
+
+MAINTAINER wuchunming02@countrygarden.com.cn
+
+ENV DEBIAN_FRONTEND noninteractive
+
+RUN cd / && mkdir -p /workspace/cheetah
+
+COPY ${pwd} /workspace/cheetah
+
+RUN cd /workspace/cheetah && ls && cd ../..
+
+RUN chmod 777 /workspace/cheetah/CI/build-cheetah.sh
+
+WORKDIR /workspace/cheetah
+
+CMD ["/bin/bash", "/workspace/cheetah/CI/build-cheetah.sh"]

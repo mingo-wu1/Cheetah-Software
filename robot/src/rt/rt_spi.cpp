@@ -19,7 +19,6 @@ static BZL_QUADRUPED::Logger _logger("RT_SPI");
 
 unsigned char spi_mode = SPI_MODE_0;
 unsigned char spi_bits_per_word = 8;
-// unsigned int spi_speed = 6000000;
 uint8_t lsb = 0x01;
 
 /// Add by hanyuanqiang, 2021-10-19, Support for advanced version of Linux kernel

@@ -1,7 +1,7 @@
 #!/bin/bash
 set -e
 
-QUADRUPED_IP="192.168.137.101"
+QUADRUPED_IP="192.168.12.1"
 
 script_abs=$(readlink -f "$0")
 script_dir=$(dirname $script_abs)

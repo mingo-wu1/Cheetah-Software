@@ -193,7 +193,7 @@ Quadruped<T> buildMiniCheetahLinkageIndustrial() {
   SpatialInertia<T> abadInertia(0.582, abadCOM, abadRotationalInertia);
 
   Mat3<T> hipRotationalInertia;
-  hipRotationalInertia << 4286.322, -39.506, -203.698, -39.506, 986.012, -856.227, -203.698, -856.227, 1262.821;
+  hipRotationalInertia << 4286.322, -39.506, -203.698, -39.506, 3986.012, -856.227, -203.698, -856.227, 1262.821;
   hipRotationalInertia = hipRotationalInertia * 1e-6;
   Vec3<T> hipCOM(0.001095, 0.039744, -0.025579);
   SpatialInertia<T> hipInertia(0.915, hipCOM, hipRotationalInertia);

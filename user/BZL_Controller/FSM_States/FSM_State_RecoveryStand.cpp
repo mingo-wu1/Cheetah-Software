@@ -15,10 +15,9 @@
  * @param _controlFSMData holds all of the relevant control data
  */
 template <typename T>
-FSM_State_RecoveryStand<T>::FSM_State_RecoveryStand(ControlFSMData<T>* _controlFSMData, 
-	FSM_StateName stateNameIn, const std::string &stateStringIn)
+FSM_State_RecoveryStand<T>::FSM_State_RecoveryStand(ControlFSMData<T>* _controlFSMData)
   ///Mod by Peibo,2021-08-04,fix the wrong state name
-    : FSM_State<T>(_controlFSMData, stateNameIn, stateStringIn){
+    : FSM_State<T>(_controlFSMData, FSM_StateName::RECOVERY_STAND, "RECOVERY_STAND"){
   ///Ori Code:
   //: FSM_State<T>(_controlFSMData, FSM_StateName::STAND_UP, "STAND_UP"){
   ///Mod End"
@@ -87,7 +86,7 @@ FSM_State_RecoveryStand<T>::FSM_State_RecoveryStand(ControlFSMData<T>* _controlF
 }
 
 template <typename T>
-BT::NodeStatus FSM_State_RecoveryStand<T>::onStart() {
+void FSM_State_RecoveryStand<T>::onEnter() {
   // Default is to not transition
   this->nextStateName = this->stateName;
 
@@ -124,8 +123,7 @@ BT::NodeStatus FSM_State_RecoveryStand<T>::onStart() {
   /// Add Begin by peibo, 2021-08-04,modify the judgment conditions for the completion of the transition procedure for recovery stand mode
   isFinshStand = false;
   /// Add End 
-
-  return BT::NodeStatus::RUNNING;
+  this->transitionErrorMode = 0;
 }
 
 template <typename T>
@@ -142,7 +140,7 @@ bool FSM_State_RecoveryStand<T>::_UpsideDown(){
  * Calls the functions to be executed on each control loop iteration.
  */
 template <typename T>
-BT::NodeStatus FSM_State_RecoveryStand<T>::onRunning() {
+void FSM_State_RecoveryStand<T>::run() {
   /// Add Begin by wuchunming, 20211020, Anti kick function in recovery stand fsm state
   SafeChecker(isFinshStand);
   /// Add End
@@ -175,8 +173,6 @@ BT::NodeStatus FSM_State_RecoveryStand<T>::onRunning() {
   }
 
  ++_state_iter;
-
- return BT::NodeStatus::RUNNING;
 }
 
 template <typename T>
@@ -341,6 +337,7 @@ void FSM_State_RecoveryStand<T>::_FoldLegs(const int & curr_iter){
     else
     {
       _flag = StandUp;
+      isNearStand=false;
     }
     for(size_t leg(0); leg < 4; leg++)
       initial_jpos[leg] = fold_jpos[leg];
@@ -395,6 +392,10 @@ FSM_StateName FSM_State_RecoveryStand<T>::checkTransition() {
       this->nextStateName = FSM_StateName::PASSIVE;
       break;
 
+    case K_DAMP:  // normal c
+      this->nextStateName = FSM_StateName::DAMP;
+      break;
+
     case K_BALANCE_STAND: 
       this->nextStateName = FSM_StateName::BALANCE_STAND;
       break;
@@ -446,6 +447,10 @@ TransitionData<T> FSM_State_RecoveryStand<T>::transition() {
       this->transitionData.done = true;
       break;
 
+    case FSM_StateName::DAMP:  // normal
+      this->transitionData.done = true;
+      break;
+
     /// Mod Begin by peibo, 2021-08-04,modify the judgment conditions for the completion of the transition procedure for recovery stand mode
     case FSM_StateName::BALANCE_STAND:
  
@@ -461,7 +466,7 @@ TransitionData<T> FSM_State_RecoveryStand<T>::transition() {
       this->transitionData.done = isFinshStand;
       if(this->transitionData.done == false)
       {
-        // this->run();
+        this->run();
       }
       break;
     /// Ori Code:
@@ -499,7 +504,7 @@ TransitionData<T> FSM_State_RecoveryStand<T>::transition() {
  * Cleans up the state information on exiting the state.
  */
 template <typename T>
-void FSM_State_RecoveryStand<T>::onHalted() {
+void FSM_State_RecoveryStand<T>::onExit() {
   // Nothing to clean up when exiting
 }
 

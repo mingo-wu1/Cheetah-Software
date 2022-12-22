@@ -61,14 +61,13 @@ template <typename T>
 class FSM_State_BalanceStand : public FSM_State<T> {
  public:
   EIGEN_MAKE_ALIGNED_OPERATOR_NEW
-  FSM_State_BalanceStand(ControlFSMData<T>* _controlFSMData, 
-	FSM_StateName stateNameIn, const std::string &stateStringIn);
+  FSM_State_BalanceStand(ControlFSMData<T>* _controlFSMData);
 
   // Behavior to be carried out when entering a state
-  BT::NodeStatus onStart() override final;
+  void onEnter() override;
 
   // Run the normal behavior for the state
-  BT::NodeStatus onRunning() override final;
+  void run();
 
   // Checks for any transition triggers
   FSM_StateName checkTransition();
@@ -77,7 +76,7 @@ class FSM_State_BalanceStand : public FSM_State<T> {
   TransitionData<T> transition();
 
   // Behavior to be carried out when exiting a state
-  void onHalted() override final;
+  void onExit();
 
  private:
   BZL_QUADRUPED::Logger _logger = BZL_QUADRUPED::Logger("FSM_State_BalanceStand");

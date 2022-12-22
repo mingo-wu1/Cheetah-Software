@@ -17,14 +17,20 @@ extern const int g_mpc_horizon_length;
 ////////////////////
 // Controller
 ////////////////////
-
+/*
+（1）原理
+参考Dynamic Locomotion in the MIT Cheetah 3 Through Convex Model-Predictive Control
+一个步态周期由horizonLength(10)个mpc周期组成
+步态按1KHz处理 mpc计数间隔为30左右 一毫秒计数一次来控制频率 即一个mpc周期为30ms
+则步态周期为 10*30 =300ms
+*/
 ConvexMPCLocomotion::ConvexMPCLocomotion(float _dt, int _iterations_between_mpc, BZL_UserParameters* parameters) :
   _logger("ConvexMPCLocomotion"),
-  iters_between_mpc_(_iterations_between_mpc),
-  dt_(_dt)
+  iters_between_mpc_(_iterations_between_mpc),                                                                            //MPC的迭代次数，控制频率用
+  dt_(_dt)                                                                                                                //控制周期
   /// Add End
   /* origin code
-  trotting_(horizon_length_, Vec4<int>(0,5,5,0), Vec4<int>(5,5,5,5),"Trotting"),
+  trotting_(horizon_length_, Vec4<int>(0,5,5,0), Vec4<int>(5,5,5,5),"Trotting"),                                          //以下的格式都一样，是一个默认设置。第一个向量时四条腿的的偏移量（相位差），第二个向量是mpc支撑腿的中一步持续时长（支撑时长）
   bounding_(horizon_length_, Vec4<int>(5,5,0,0),Vec4<int>(4,4,4,4),"Bounding"),
   //bounding_(horizon_length_, Vec4<int>(5,5,0,0),Vec4<int>(3,3,3,3),"Bounding"),
   pronking_(horizon_length_, Vec4<int>(0,0,0,0),Vec4<int>(4,4,4,4),"Pronking"),
@@ -45,6 +51,7 @@ ConvexMPCLocomotion::ConvexMPCLocomotion(float _dt, int _iterations_between_mpc,
   SetParams(parameters);
 }
 
+//3.初始化MPC
 void ConvexMPCLocomotion::Initialize(){
   for(int leg = 0; leg < 4; leg++) 
     first_swing_[leg] = true;
@@ -66,7 +73,7 @@ void ConvexMPCLocomotion::Initialize(){
 }
 
 void ConvexMPCLocomotion::SetParams(BZL_UserParameters* parameters){
-  horizon_length_ = 10;
+  horizon_length_ = 10;                                                                                               //MPC的预测未来状态数量，预测未来的10个时间步，值越大MPC计算量越大，越大和越小都不行，电机40KHZ不支持
   iters_between_gait_seg_ = 27/2;
   gait_seg_ = 10;
   foot_height_ = .06;
@@ -75,29 +82,29 @@ void ConvexMPCLocomotion::SetParams(BZL_UserParameters* parameters){
   mu_ = 0.4;
   rforce_max_ = 120;
   alpha_ = 4e-5;
-  params_ = parameters;
-  dt_mpc_ = dt_ * iters_between_mpc_;
-  default_iters_between_mpc_ = iters_between_mpc_;
+  params_ = parameters;                                                                                               //（1）定义用户参数，根据传进来的形参
+  dt_mpc_ = dt_ * iters_between_mpc_;                                                                                 //（2）定义mpc运算周期，公式：mpc运算周期=迭代次数*控制周期   
+  default_iters_between_mpc_ = iters_between_mpc_;                                                                    //（3）定义MPC的迭代次数
   QUADRUPED_INFO(_logger, "dt_: %.3f iterations: %d, dt_mpc_: %.3f", dt_, iters_between_mpc_, dt_mpc_);
   
   /// Mod Begin by wuchunming, 2021-03-10, add BZL parameters
-  setup_problem(dt_mpc_, horizon_length_, mu_, rforce_max_);
+  setup_problem(dt_mpc_, horizon_length_, mu_, rforce_max_);                                                          //（4）二次规划器QP的参数配置，配置1）mpc运算周期、2）MPC的预测未来状态数量（分段数）、3）摩擦系数、4）最大力
   /// Mod End
   
   //setup_problem(dt_mpc_, horizon_length_, 0.4, 650); // DH
-  rpy_compensate_[0] = 0;
+  rpy_compensate_[0] = 0;                                                                                             //（5）初始化变量欧拉角数据为0
   rpy_compensate_[1] = 0;
   rpy_compensate_[2] = 0;
   rpy_integral_[0] = 0;
   rpy_integral_[1] = 0;
   rpy_integral_[2] = 0;
 
-  for(int i = 0; i < 4; i++)
+  for(int i = 0; i < 4; i++)                                                                                          //（6）初始化四条腿的状态初次都是摆动状态
     first_swing_[i] = true;
 
-  InitSparseMPC();
+  InitSparseMPC();                                                                                                    //（7）初始化稀疏MPC
 
-  pos_body_des.setZero();
+  pos_body_des.setZero();                                                                                             //（8）初始化期望的位置、速度、加速度为0
   vel_body_des.setZero();
   acc_body_des.setZero();
    
@@ -149,13 +156,15 @@ void ConvexMPCLocomotion::SetParams(BZL_UserParameters* parameters){
   /// Mod End
 }
 
+//4.重新计算 MPC时间
 void ConvexMPCLocomotion::RecomputeTiming(int iterations_per_mpc) {
   iters_between_mpc_ = iterations_per_mpc;
   dt_mpc_ = dt_ * iterations_per_mpc;
 }
 
 void ConvexMPCLocomotion::SetupCommand(ControlFSMData<float> & data){
-  if(data._quadruped->_robotType == RobotType::MINI_CHEETAH){
+  /*（1）根据机型设置默认机体期望高度*/
+  if(data._quadruped->_robotType == RobotType::MINI_CHEETAH){ // 如果是MINI_CHEETAH机器人
     body_height_ = 0.29;
   }else if(data._quadruped->_robotType == RobotType::CHEETAH_3){
     body_height_ = 0.45;
@@ -163,62 +172,67 @@ void ConvexMPCLocomotion::SetupCommand(ControlFSMData<float> & data){
     assert(false);
   }
 
-  float x_vel_cmd, y_vel_cmd;
-  float filter(0.1);
-  if(data.controlParameters->use_rc){
-    const rc_control_settings* rc_cmd = data._desiredStateCommand->rcCommand;
-    data.userParameters->cmpc_gait = rc_cmd->variable[0];
-    yaw_turn_rate_ = -rc_cmd->omega_des[2];
-    x_vel_cmd = rc_cmd->v_des[0];
-    y_vel_cmd = rc_cmd->v_des[1] * 0.5;
-    body_height_ += rc_cmd->height_variation * 0.08;
-  }else{
-    yaw_turn_rate_ = data._desiredStateCommand->rightAnalogStick[0];
+  /*（2）使用或者不使用遥控手柄来设置XY\偏航的速度命令、步态命令、机身高度*/
+  float x_vel_cmd, y_vel_cmd; // x，y两个方向的速度指令
+  float filter(0.1); // 定义一个过滤器权重变量，值为0.1， 这个值决定期望状态的变化幅度
+  if(data.controlParameters->use_rc){                                         // 采用手柄控制
+    const rc_control_settings* rc_cmd = data._desiredStateCommand->rcCommand; // 1设置获得遥控指令
+    data.userParameters->cmpc_gait = rc_cmd->variable[0];                     // 2设置获得步态类型指令
+    yaw_turn_rate_ = -rc_cmd->omega_des[2];                                   // 3设置机身偏航方向速度
+    x_vel_cmd = rc_cmd->v_des[0];                                             // 4设置机身X方向速度指令
+    y_vel_cmd = rc_cmd->v_des[1] * 0.5;                                       // 5设置机身Y方向速度指令
+    body_height_ += rc_cmd->height_variation * 0.08;                          // 6设置调整机身的高度
+  }else{                                                                      // 如果不采用遥控手柄控制
+    yaw_turn_rate_ = data._desiredStateCommand->rightAnalogStick[0];          // 设置机身偏航方向速度
 
-    x_vel_cmd = data._desiredStateCommand->leftAnalogStick[1];
-    y_vel_cmd = data._desiredStateCommand->leftAnalogStick[0];
+    x_vel_cmd = data._desiredStateCommand->leftAnalogStick[1];                // 设置机身X方向速度指令
+    y_vel_cmd = data._desiredStateCommand->leftAnalogStick[0];                // 设置机身Y方向速度指令
   }
+
+  /*（3）通过上一次的期望数据和本次遥控手柄输入的期望数据，计算机体的期望位姿【即XY的期望位置、期望偏航角度】*/
+  /*（1）计算本次机体XY期望速度*/
   /// Mod Begin by peibo zhaoyudong, 2021-04-09,Velocity expected smoothing
-  bool use_smooth = data.userParameters->liner_a_limit_enable > 0.1;
+  bool use_smooth = data.userParameters->liner_a_limit_enable > 0.1;          // 速度平滑
   float speed_step = (float)(fabs(data.userParameters->liner_a_max) * dt_);
   x_vel_des_ = velocityExpectedSmoothing(use_smooth,speed_step,filter,x_vel_cmd,x_vel_des_);
   y_vel_des_ = velocityExpectedSmoothing(use_smooth,speed_step,filter,y_vel_cmd,y_vel_des_);
   /// Ori Code :
-  // x_vel_des_ = x_vel_des_ * (1 - filter) + x_vel_cmd * filter;
-  // y_vel_des_ = y_vel_des_ * (1 - filter) + y_vel_cmd * filter;
+  // x_vel_des_ = x_vel_des_ * (1 - filter) + x_vel_cmd * filter;             // 设置XY方向期望速度，注意：这里的计算经过权重滤波的
+  // y_vel_des_ = y_vel_des_ * (1 - filter) + y_vel_cmd * filter;             // 公式：本次X方向期望速度=上一次X方向期望速度*（1-过滤器的权重变量）+ 遥控器机身X方向速度命令*过滤器的权重变量
   /// Mod End
 
+  /*（2）计算本次机体期望PRY方向*/
   /// Add Begin by yuzhiyou, 2021-06-03, fix yaw_des_ bug for move
   if (first_run_)
-    yaw_des_ = data._stateEstimator->getResult().rpy[2] + dt_ * yaw_turn_rate_;
+    yaw_des_ = data._stateEstimator->getResult().rpy[2] + dt_ * yaw_turn_rate_; //计算本次期望偏航角度
   else
-    yaw_des_ =  yaw_des_+dt_ * yaw_turn_rate_;
+    yaw_des_ =  yaw_des_ + dt_ * yaw_turn_rate_;
   /// origin code
  // yaw_des_ = data._stateEstimator->getResult().rpy[2] + dt_ * yaw_turn_rate_;
   /// Add End
 
-  roll_des_ = 0.;
-  pitch_des_ = 0.;
+  roll_des_ = 0.; // 默认横滚动角=0
+  pitch_des_ = 0.; // 默认俯仰角=0
 
 }
 
 template<>
 void ConvexMPCLocomotion::Run(ControlFSMData<float>& data) {
 
-  /// Add Begin by wuchunming, 2021-03-10, add BZL parameters
-   iters_between_mpc_ = iters_between_mpc_ * params_->factor_of_iterations_between_mpc;
-   dt_mpc_ = dt_ * iters_between_mpc_;
-   horizon_length_ = g_mpc_horizon_length;//params_->horizon_length;
-  //  iters_between_gait_seg_ = params_->iterations_between_gait_seg;
-   gait_seg_ = params_->gait_seg;
-  //  foot_height_ = params_->foot_height;
-  //  dt_gait_seg_ = dt_ * iters_between_gait_seg_;
-   raibert_coeff_ = params_->raibert_coeff;
-   mu_ = params_->mu;
-   rforce_max_ = params_->fmax;
-   alpha_ = params_->alpha;
-  /// Add End
-  /// Add Begin by peibo 2021-04-29,0430 integration of related functions, adding stair operation
+    /// Add Begin by wuchunming, 2021-03-10, add BZL parameters
+    iters_between_mpc_ = iters_between_mpc_ * params_->factor_of_iterations_between_mpc;
+    dt_mpc_ = dt_ * iters_between_mpc_;
+    horizon_length_ = g_mpc_horizon_length;//params_->horizon_length;
+    //  iters_between_gait_seg_ = params_->iterations_between_gait_seg;
+    gait_seg_ = params_->gait_seg;
+    //  foot_height_ = params_->foot_height;
+    //  dt_gait_seg_ = dt_ * iters_between_gait_seg_;
+    raibert_coeff_ = params_->raibert_coeff;
+    mu_ = params_->mu;
+    rforce_max_ = params_->fmax;
+    alpha_ = params_->alpha;
+    /// Add End
+    /// Add Begin by peibo 2021-04-29,0430 integration of related functions, adding stair operation
   if (data.userParameters->wbc_param_mode == STAIR)
   {
     iters_between_gait_seg_ = data.userParameters->iterationsBetweenGaitSeg_stair;
@@ -241,7 +255,7 @@ void ConvexMPCLocomotion::Run(ControlFSMData<float>& data) {
   bool omniMode = false;
 
   // Command Setup
-  SetupCommand(data);
+  SetupCommand(data); // 设置躯干高度，躯干位置和姿态
 
 /// Add Begin by wuchunming, 20210702, add rpy mode function for locomotion
   body_height_ = UpdateBodyHeight(data, body_height_);
@@ -626,7 +640,7 @@ void ConvexMPCLocomotion::Run(ControlFSMData<float>& data) {
   ContactDetection(data, false);
   /// Add End
 
-  UpdateMPCIfNeeded(mpcTable, data, omniMode);
+  UpdateMPCIfNeeded(mpcTable, data, omniMode); // 功能：定时迭代更新计算MPC，并解算足端反作用力（重点）
 
   //  StateEstimator* se = hw_i->state_estimator;
   Vec4<float> se_contactState(0,0,0,0);
@@ -647,26 +661,30 @@ void ConvexMPCLocomotion::Run(ControlFSMData<float>& data) {
     }
   }
 #endif
-
+// 【C控制范畴】依次遍历四条腿进行解算，解算完成四条腿的控制指令一起发送给腿部控制器，保证控制是同步的
+  // 注意这里的控制输入没有足端反作用力和关节KD参数，但是支撑相是有的，因为腿部控制器是对四条腿进行同时控制的（遍历的解算时候是单条腿解算，解算完成四条腿的控制指令一起发送给腿部控制器，保证控制是同步的）
+  // 这里是否是接触状态在上面的步态gait就已经实现了，这里仅仅调用结果就可以
   for(int foot = 0; foot < 4; foot++)
-  {
+  { /*（1）判断当前脚处于支撑状态还是摆动状态*/
     float contact_state = contactStates[foot];
     float swingState = swingStates[foot];
+    // 原理:使用贝塞尔曲线对足端的轨迹进行规划，输出足端的位置轨迹和速度轨迹，然后把位置、速度、增益Kp/Kd作为控制输入，发送给WBC执行或者腿部控制器执行
+    // 原理:注意这里的控制输入没有足端反作用力和关节KD参数，但是支撑相是有的，因为腿部控制器是对四条腿进行同时控制的（遍历的解算时候是单条腿解算，解算完成四条腿的控制指令一起发送给腿部控制器)
     if(swingState > 0) // foot is in swing
     {
-      if(first_swing_[foot])
+      if(first_swing_[foot])                                                                                                  //（1）若刚从支撑相切换到摆动相
       {
-        first_swing_[foot] = false;
-        foot_swing_traj_[foot].setInitialPosition(pos_foot_world_[foot]);
+        first_swing_[foot] = false;                                                                                           // 标志位置0
+        foot_swing_traj_[foot].setInitialPosition(pos_foot_world_[foot]);                                                     // 初始化设置起始点为原点 
       }
 
-#ifdef DRAW_DEBUG_SWINGS
+#ifdef DRAW_DEBUG_SWINGS //与摆动调试有关系，运行的时候不会调用的
       auto* debugPath = data.visualizationData->addPath();
       if(debugPath) {
         debugPath->num_points = 100;
         debugPath->color = {0.2,1,0.2,0.5};
         float step = (1.f - swingState) / 100.f;
-        for(int i = 0; i < 100; i++) {
+        for(int i = 0; i < 100; i++) {                                                                                       //贝塞尔曲线的轨迹，分100个点
           /// Add Begin by wuchunming, 2021-04-23, add select for selecting foot trajectory plan, select plan
           if(FootTrajectoryPlanType::PARABOLA == foot_traj_plan_type_){
             foot_swing_traj_[foot].computeSwingTrajectoryBezier(swingState + i * step, swing_times_[foot]);
@@ -688,7 +706,7 @@ void ConvexMPCLocomotion::Run(ControlFSMData<float>& data) {
 
       /// Add Begin by wuchunming, 2021-04-23, add select for selecting foot trajectory plan, select plan
       if(FootTrajectoryPlanType::PARABOLA == foot_traj_plan_type_){
-        foot_swing_traj_[foot].computeSwingTrajectoryBezier(swingState, swing_times_[foot]);
+        foot_swing_traj_[foot].computeSwingTrajectoryBezier(swingState, swing_times_[foot]);                      //【重点！！！】计算贝塞尔曲线
       }else if(FootTrajectoryPlanType::CUBICSPLINE == foot_traj_plan_type_){
         foot_swing_traj_[foot].computeSwingTrajectoryBezierForStair(swingState, swing_times_[foot]);
       }else{}
@@ -713,7 +731,7 @@ void ConvexMPCLocomotion::Run(ControlFSMData<float>& data) {
       // }else{}
 
       if(FootTrajectoryPlanType::PARABOLA == foot_traj_plan_type_){
-        foot_swing_traj_[foot].computeSwingTrajectoryBezier(swingState, swing_times_[foot]);
+        foot_swing_traj_[foot].computeSwingTrajectoryBezier(swingState, swing_times_[foot]);                         //（2）使用贝塞尔曲线，计算腿部足端轨迹,  //输入参数：当前在摆动相的位置，摆动相时间长度 ;//计算贝塞尔曲线
       }else if(FootTrajectoryPlanType::CUBICSPLINE == foot_traj_plan_type_){
         foot_swing_traj_[foot].computeSwingTrajectoryBezierForStair(swingState, swing_times_[foot]);
       }else{}
@@ -725,30 +743,44 @@ void ConvexMPCLocomotion::Run(ControlFSMData<float>& data) {
       //      foot_swing_traj_[foot]->updateFF(hw_i->leg_controller->leg_datas[foot].q,
       //                                          hw_i->leg_controller->leg_datas[foot].qd, 0); // velocity dependent friction compensation todo removed
       //hw_i->leg_controller->leg_datas[foot].qd, fsm->main_control_settings.variable[2]);
+      
+      //（3）获得足端轨迹位置点和速度点
+      Vec3<float> pDesFootWorld = foot_swing_traj_[foot].getPosition();                                           // 获得轨迹位置点
+      Vec3<float> vDesFootWorld = foot_swing_traj_[foot].getVelocity();                                           // 获得轨迹速度点
 
-      Vec3<float> pDesFootWorld = foot_swing_traj_[foot].getPosition();
-      Vec3<float> vDesFootWorld = foot_swing_traj_[foot].getVelocity();
-      Vec3<float> pDesLeg = seResult.rBody * (pDesFootWorld - seResult.position) 
+      //（4）足端轨迹位置点和速度点先转换到机体坐标系下，然后再转到hip关节坐标系下
+      Vec3<float> pDesLeg = seResult.rBody * (pDesFootWorld - seResult.position)                                  //先转换到机体坐标系等同于到机体坐标系下
         - data._quadruped->getHipLocation(foot);
-      Vec3<float> vDesLeg = seResult.rBody * (vDesFootWorld - seResult.vWorld);
+      Vec3<float> vDesLeg = seResult.rBody * (vDesFootWorld - seResult.vWorld);                                   //再转换到机体坐标系等同于到髋关节坐标系下
 
+      //（5）【默认使用wbc控制】为wbc控制更新参数，参数包括腿部位置、腿部速度、腿部加速度
       // Update for WBC
       pos_foot_world_des[foot] = pDesFootWorld;
       vel_foot_world_des[foot] = vDesFootWorld;
       acc_foot_world_des[foot] = foot_swing_traj_[foot].getAcceleration();
       
-      if(!data.userParameters->use_wbc){
+      //（6）判断是否使用WBC控制
+      if(!data.userParameters->use_wbc){                                                                          //若不使用WBC,直接发送腿部控制命令到腿部控制器
         // Update leg control command regardless of the usage of WBIC
-        data._legController->commands[foot].pDes = pDesLeg;
-        data._legController->commands[foot].vDes = vDesLeg;
-        data._legController->commands[foot].kpCartesian = Kp_;
-        data._legController->commands[foot].kdCartesian = Kd_;
+        //不管WBIC的使用情况如何，更新腿部控制命令都是这几个  //用腿部控制器控制腿部的运动
+        data._legController->commands[foot].pDes = pDesLeg;                                                       //腿部期望位置
+        data._legController->commands[foot].vDes = vDesLeg;                                                       //腿部期望速度
+        data._legController->commands[foot].kpCartesian = Kp_;                                                    //腿部KP增益
+        data._legController->commands[foot].kdCartesian = Kd_;                                                    //腿部KD增益
       }
 
     }
+
+//原理
+//使用贝塞尔曲线对足端的轨迹进行规划，输出足端的位置轨迹和速度轨迹，然后把位置、速度、增益Kp/Kd作为控制输入发送给WBC执行或者腿部控制器执行
+//摆动腿使用贝塞尔曲线对足端的轨迹进行规划，输出足端的位置轨迹和速度轨迹
+//支撑腿通过MPC计算出足端的反作用力
+//然后把位置、速度、增益Kp/Kd、反作用力、关节Kd参数作为控制输入，发送给WBC执行或者腿部控制器执行
+//注意支撑相的控制输入是有足端反作用力和关节KD参数的，因为腿部控制器是对四条腿进行同时控制的（遍历的解算时候是单条腿解算，解算完成四条腿的控制指令一起发送给腿部控制器)
+
     else // foot is in stance
     {
-      first_swing_[foot] = true;
+      first_swing_[foot] = true;                                                                              //设置刚从摆动相切换到支撑相状态
 
 #ifdef DRAW_DEBUG_SWINGS
       auto* actualSphere = data.visualizationData->addSphere();
@@ -757,34 +789,36 @@ void ConvexMPCLocomotion::Run(ControlFSMData<float>& data) {
       actualSphere->color = {0.2, 0.2, 0.8, 0.7};
 #endif
 
-      Vec3<float> pDesFootWorld = foot_swing_traj_[foot].getPosition();
-      Vec3<float> vDesFootWorld = foot_swing_traj_[foot].getVelocity();
-      Vec3<float> pDesLeg = seResult.rBody * (pDesFootWorld - seResult.position) - data._quadruped->getHipLocation(foot);
-      Vec3<float> vDesLeg = seResult.rBody * (vDesFootWorld - seResult.vWorld);
+      //（1）根据运动学坐标转换，通过摆动腿的位置和速度计算，足端的位置和速度
+      Vec3<float> pDesFootWorld = foot_swing_traj_[foot].getPosition();                                       //获取摆动腿的位置
+      Vec3<float> vDesFootWorld = foot_swing_traj_[foot].getVelocity();                                       //获取摆动腿的速度
+      Vec3<float> pDesLeg = seResult.rBody * (pDesFootWorld - seResult.position) - data._quadruped->getHipLocation(foot);                   //计算腿部足端位置
+      Vec3<float> vDesLeg = seResult.rBody * (vDesFootWorld - seResult.vWorld);                                                             //计算腿部足端速度
       //cout << "Foot " << foot << " relative velocity desired: " << vDesLeg.transpose() << "\n";
 
+      //（2）若未使用WBC 发送数据到腿部控制器
       if(!data.userParameters->use_wbc){
-        data._legController->commands[foot].pDes = pDesLeg;
-        data._legController->commands[foot].vDes = vDesLeg;
-        data._legController->commands[foot].kpCartesian = Kp_stance_;
-        data._legController->commands[foot].kdCartesian = Kd_stance_;
+        data._legController->commands[foot].pDes = pDesLeg;                                                   //四条腿腿部期望位置命令
+        data._legController->commands[foot].vDes = vDesLeg;                                                   //四条腿腿部期望速度命令
+          data._legController->commands[foot].kpCartesian = Kp_stance_;                                       //四条腿腿部KP参数命令
+          data._legController->commands[foot].kdCartesian = Kd_stance_;                                       //四条腿腿部KD参数命令
 
-        data._legController->commands[foot].forceFeedForward = f_fforce_[foot];
-        data._legController->commands[foot].kdJoint = Mat3<float>::Identity() * 0.2;
+        data._legController->commands[foot].forceFeedForward = f_fforce_[foot];                               //四条腿腿部反作用力命令
+        data._legController->commands[foot].kdJoint = Mat3<float>::Identity() * 0.2;                          //关节KD参数命令
 
         //      foot_swing_traj_[foot]->updateFF(hw_i->leg_controller->leg_datas[foot].q,
         //                                          hw_i->leg_controller->leg_datas[foot].qd, 0); todo removed
         // hw_i->leg_controller->leg_commands[foot].tau_ff += 0*footSwingController[foot]->getTauFF();
-      }else{ // Stance foot damping
-        data._legController->commands[foot].pDes = pDesLeg;
-        data._legController->commands[foot].vDes = vDesLeg;
-        data._legController->commands[foot].kpCartesian = 0.*Kp_stance_;
-        data._legController->commands[foot].kdCartesian = Kd_stance_;
+      }else{ // Stance foot damping                                                                           //（3）若使用WBC,直接发送数据到腿部控制器
+        data._legController->commands[foot].pDes = pDesLeg;                                                   //四条腿腿部期望位置命令
+        data._legController->commands[foot].vDes = vDesLeg;                                                   //四条腿腿部期望速度命令
+        data._legController->commands[foot].kpCartesian = 0.*Kp_stance_;                                      //四条腿腿部KP参数命令
+        data._legController->commands[foot].kdCartesian = Kd_stance_;                                         //四条腿腿部KD参数命令
       }
       //            cout << "Foot " << foot << " force: " << f_fforce_[foot].transpose() << "\n";
-      se_contactState[foot] = contact_state;
+      se_contactState[foot] = contact_state;                                                                  //（4）更新接触状态估计
 
-      // Update for WBC
+      // Update for WBC                                                                                       //为WBC做好更新准备了
       //rforce_des[foot] = -f_fforce_[foot];
     }
   }
@@ -845,51 +879,57 @@ void ConvexMPCLocomotion::Run(ControlFSMData<double>& data) {
 
 }
 
+// 【P预测范畴】功能：定时迭代更新计算MPC，并解算足端反作用力(重点)
 void ConvexMPCLocomotion::UpdateMPCIfNeeded(int *mpcTable, ControlFSMData<float> &data, bool omniMode) {
-  //iters_between_mpc_ = 30;
-  if((iter_counter_ % iters_between_mpc_) == 0)
+  //iters_between_mpc_ = 30; // 设置计算MPC的间隔时间
+  if((iter_counter_ % iters_between_mpc_) == 0) // 当iterationCounter等于计算MPC的间隔时间，就进行一次MPC计算，用于控制频率
   {
-    auto seResult = data._stateEstimator->getResult();
-    float* p = seResult.position.data();
+    /*（1）先获得状态估计器的数据，并且计算世界坐标系下的机体速度*/
+    auto seResult = data._stateEstimator->getResult();                                           //1）先获取状态估计器的数据，包括躯干的位置、方向、速度
+    float* p = seResult.position.data();                                                         //2）定义并赋值在世界坐标系下的机体位置 
 
-    Vec3<float> v_des_robot(x_vel_des_, y_vel_des_,0);
-    Vec3<float> v_des_world = omniMode ? v_des_robot : seResult.rBody.transpose() * v_des_robot;
+    Vec3<float> v_des_robot(x_vel_des_, y_vel_des_,0);                                           //3）定义并赋值身体坐标系下的机体速度
+    Vec3<float> v_des_world = omniMode ? v_des_robot : seResult.rBody.transpose() * v_des_robot; //4）定义并赋值世界坐标系下的机体速度
     //float trajInitial[12] = {0,0,0, 0,0,.25, 0,0,0,0,0,0};
 
-
+    /*（2）判断当前状态为站立状态还是非站立状态*/
     //printf("Position error: %.3f, integral %.3f\n", pxy_err[0], x_comp_integral_);
-
-    if(current_gait_ == 4)
+    if(current_gait_ == 4) //若当前为站定状态时
     {
-      float trajInitial[12] = {
-        roll_des_,
-        pitch_des_ /*-hw_i->state_estimator->se_ground_pitch*/,
-        (float)stand_traj_[5]/*+(float)stateCommand->data.stateDes[11]*/,
-        (float)stand_traj_[0]/*+(float)fsm->main_control_settings.p_des[0]*/,
-        (float)stand_traj_[1]/*+(float)fsm->main_control_settings.p_des[1]*/,
-        (float)body_height_/*fsm->main_control_settings.p_des[2]*/,
-        0,0,0,0,0,0};
+      //（1）初始化12个躯干轨迹参数
+      float trajInitial[12] = { 
+        roll_des_,                                                                        //1）期望横滚角
+        pitch_des_ /*-hw_i->state_estimator->se_ground_pitch*/,                           //2）期望俯仰角
+        (float)stand_traj_[5]/*+(float)stateCommand->data.stateDes[11]*/,                 //3）期望偏航角
+        (float)stand_traj_[0]/*+(float)fsm->main_control_settings.p_des[0]*/,             //4）X位置 
+        (float)stand_traj_[1]/*+(float)fsm->main_control_settings.p_des[1]*/,             //5）Y位置
+        (float)body_height_/*fsm->main_control_settings.p_des[2]*/,                       //6）Z位置 
+        0,0,0,0,0,0};                                                                     //7）其他参数设置为0
 
+      //（2）变成mpc问题需要的格式 
       for(int i = 0; i < horizon_length_; i++)
         for(int j = 0; j < 12; j++)
-          trajAll_[12*i+j] = trajInitial[j];
+          trajAll_[12*i+j] = trajInitial[j];                                              //把12个躯干轨迹参数整理成MPC问题的矩阵格式
     }
 
-    else
+    else // 若当前为非站定状态时                                                                 
     {
-      const float max_pos_error = .1;
-      float xStart = world_pos_des_[0];
-      float yStart = world_pos_des_[1];
+      //(1)定义并赋值目标值：轨迹的X、Y参数，轨迹跟踪误差
+      const float max_pos_error = .1;                                                     // 定义并赋值轨迹跟踪误差为0.1
+      float xStart = world_pos_des_[0];                                                   // 定义并赋值轨迹的X参数设定为期望的X位置
+      float yStart = world_pos_des_[1];                                                   // 定义并赋值轨迹的Y参数设定为期望的Y位置
 
+      //（2）把目标值限制在误差范围内 //轨迹的X参数在误差范围外时，显示其在最大误差边界
       if(xStart - p[0] > max_pos_error) xStart = p[0] + max_pos_error;
       if(p[0] - xStart > max_pos_error) xStart = p[0] - max_pos_error;
-
+      //轨迹的Y参数在误差范围外时，显示其在最大误差边界
       if(yStart - p[1] > max_pos_error) yStart = p[1] + max_pos_error;
       if(p[1] - yStart > max_pos_error) yStart = p[1] - max_pos_error;
-
+      
       world_pos_des_[0] = xStart;
       world_pos_des_[1] = yStart;
-      
+
+      //（3）机体轨迹参数初始化      
       float trajInitial[12] = {(float)rpy_compensate_[0],  // 0
         (float)rpy_compensate_[1],    // 1
         yaw_des_,    // 2
@@ -904,12 +944,13 @@ void ConvexMPCLocomotion::UpdateMPCIfNeeded(int *mpcTable, ControlFSMData<float>
         v_des_world[1],                           // 10
         0};                                       // 11
 
+      //（4）变成mpc问题需要的格式 //轨迹为当前时刻向后预测一个步态周期的轨迹 按匀速运动计算
       for(int i = 0; i < horizon_length_; i++)
       {
         for(int j = 0; j < 12; j++)
           trajAll_[12*i+j] = trajInitial[j];
 
-        if(i == 0) // start at current position  TODO consider not doing this
+        if(i == 0) // start at current position  TODO consider not doing this  //从当前位置开始
         {
           //trajAll_[3] = hw_i->state_estimator->se_pBody[0];
           //trajAll_[4] = hw_i->state_estimator->se_pBody[1];
@@ -925,9 +966,10 @@ void ConvexMPCLocomotion::UpdateMPCIfNeeded(int *mpcTable, ControlFSMData<float>
     }
     Timer solveTimer;
 
+    //（5）判断解算离散MPC还是稠密MPC，得到足端反作用力
     if(params_->cmpc_use_sparse > 0.5) {
       SolveSparseMPC(mpcTable, data);
-    } else {
+    } else {  //一般都是计算稠密mpc，得到足端反作用力
       SolveDenseMPC(mpcTable, data);
     }
     //printf("TOTAL SOLVE TIME: %.3f\n", solveTimer.getMs());
@@ -935,13 +977,14 @@ void ConvexMPCLocomotion::UpdateMPCIfNeeded(int *mpcTable, ControlFSMData<float>
 
 }
 
+// 解算稠密MPC，得到足端反作用力的方法（一般用这个）
 void ConvexMPCLocomotion::SolveDenseMPC(int *mpcTable, ControlFSMData<float> &data) {
-  auto seResult = data._stateEstimator->getResult();
+  auto seResult = data._stateEstimator->getResult(); /*（1）先通过状态估计器获取世界坐标下状态估计值，赋值给机体对应的数据*/
 
   //float Q[12] = {0.25, 0.25, 10, 2, 2, 20, 0, 0, 0.3, 0.2, 0.2, 0.2};
   
   /// Mod Begin by wuchunming, 2021-03-10, add BZL parameter
-  float Q[12] = {0};
+  float Q[12] = {0};                                            //1）定义Q矩阵权重
   for(int i=0;i<3;++i)
     Q[i] = data.userParameters->Q1(i);
   for(int i=3;i<6;++i)
@@ -957,68 +1000,70 @@ void ConvexMPCLocomotion::SolveDenseMPC(int *mpcTable, ControlFSMData<float> &da
   //float Q[12] = {0.25, 0.25, 10, 2, 2, 40, 0, 0, 0.3, 0.2, 0.2, 0.2};
  
   /// Del Begin by wuchunming, 20210630
-  // float yaw = seResult.rpy[2];
+  // float yaw = seResult.rpy[2];                               // 2)偏航角
   /// Del End
 
-  float* weights = Q;
+  float* weights = Q;                                           // 3)权重Q矩阵
 
   /// Mod Begin by wuchunming, 2021-03-10, add BZL parameter
-  float alpha = alpha_; // make setting eventually
+  float alpha = alpha_; // make setting eventually              // alpha
   /// origin code
-  // float alpha = 4e-5
+  // float alpha = 4e-5                                         //4)alpha
   /// Mod End
 
   //float alpha = 4e-7; // make setting eventually: DH
-  float* p = seResult.position.data();
-  float* v = seResult.vWorld.data();
-  float* w = seResult.omegaWorld.data();
-  float* q = seResult.orientation.data();
+  float* p = seResult.position.data();                          //5）机体位置
+  float* v = seResult.vWorld.data();                            //6）机体速度
+  float* w = seResult.omegaWorld.data();                        //7）机体角速度
+  float* q = seResult.orientation.data();                       //8）机体方向
 
+  /*（2）计算从质心指向足端的向量*/
   float r[12];
   for(int i = 0; i < 12; i++)
-    r[i] = pos_foot_world_[i%4][i/4]  - seResult.position[i/4];
+    r[i] = pos_foot_world_[i%4][i/4] - seResult.position[i/4]; //质心指向足端的向量=足端坐标（x,y,z)减去质心的位置坐标（x,y,z)
 
   //printf("current posistion: %3.f %.3f %.3f\n", p[0], p[1], p[2]);
-
+  /*(3)Alpha值限幅*/
   if(alpha > 1e-4) {
     QUADRUPED_INFO(_logger, "Alpha was set too high (%f) adjust to 1e-5", alpha);
     alpha = 1e-5;
   }
-
-  Vec3<float> pxy_act(p[0], p[1], 0);
-  Vec3<float> pxy_des(world_pos_des_[0], world_pos_des_[1], 0);
+  /*（5）设置MPC的参数*/
+  Vec3<float> pxy_act(p[0], p[1], 0);                                         //2）定义从IMU状态估计器中获取的机体XY位置的中间变量
+  Vec3<float> pxy_des(world_pos_des_[0], world_pos_des_[1], 0);               //3）定义从世界坐标系中获取的期望机体XY位置的中间变量
   //Vec3<float> pxy_err = pxy_act - pxy_des;
-  float pz_err = p[2] - body_height_;
-  Vec3<float> vxy(seResult.vWorld[0], seResult.vWorld[1], 0);
+  float pz_err = p[2] - body_height_;/*（4）计算质心高度上的偏差*/
+  Vec3<float> vxy(seResult.vWorld[0], seResult.vWorld[1], 0);                 //4）定义从IMU状态估计器中获取的机体XY速度的中间变量
 
-  Timer t1;
-  dt_mpc_ = dt_ * iters_between_mpc_;
+  Timer t1;                                                                   //1）定义第一个计时器
+  dt_mpc_ = dt_ * iters_between_mpc_;                                         /*5）设置计算MPC时间间隔 */                  
   
   /// Mod Begin by wuchunming, 2021-03-10, add BZL parameter
-  setup_problem(dt_mpc_,horizon_length_,mu_,rforce_max_);
+  setup_problem(dt_mpc_,horizon_length_,mu_,rforce_max_);                     /*6）二次规划器QP的参数配置*/
   /// origin code
   setup_problem(dt_mpc_,horizon_length_,0.4,120);
   /// Mod End
   
   //setup_problem(dt_mpc_,horizon_length_,0.4,650); //DH
-  update_x_drag(x_comp_integral_);
-  if(vxy[0] > 0.3 || vxy[0] < -0.3) {
+  update_x_drag(x_comp_integral_);                                            /*7）z轴方向加速度受x轴方向速度的影响程度*/
+  if(vxy[0] > 0.3 || vxy[0] < -0.3) {                                         /*8）机体XY速度过大/过小处理*/
     //x_comp_integral_ += params_->cmpc_x_drag * pxy_err[0] * dt_mpc_ / vxy[0];
     x_comp_integral_ += params_->cmpc_x_drag * pz_err * dt_mpc_ / vxy[0];
   }
 
   //printf("pz err: %.3f, pz int: %.3f\n", pz_err, x_comp_integral_);
 
-  update_solver_settings(params_->jcqp_max_iter, params_->jcqp_rho,
+  update_solver_settings(params_->jcqp_max_iter, params_->jcqp_rho,           /*9）更新qp求解器设置*/
       params_->jcqp_sigma, params_->jcqp_alpha, params_->jcqp_terminate, params_->use_jcqp);
   //t1.stopPrint("Setup MPC");
 
-  Timer t2;
+  /*（6）解MPC的过程，得到足端反作用力*/  //trajAll放的是期望状态轨迹
+  Timer t2; //定义第二个计时器，测量解一次MPC的时间需要多久
   //cout << "dt_mpc_: " << dt_mpc_ << "\n";
 
   /// Mod Begin yuzhiyou 2021-04-13,
   const float *rpy = seResult.rpy.data();
-  update_problem_data_floats_yzy(p, v, q, w, r, rpy, weights, trajAll_, alpha, mpcTable);
+  update_problem_data_floats_yzy(p, v, q, w, r, rpy, weights, trajAll_, alpha, mpcTable); //【非常重要】更新QP问题参数和解，每次解算出的horizon个组力 只取第一组 convex_mpc 5节开头
   /// Ori Code:
   //update_problem_data_floats(p, v, q, w, r, yaw, weights, trajAll_, alpha, mpcTable);
   /// Mod End
@@ -1026,20 +1071,22 @@ void ConvexMPCLocomotion::SolveDenseMPC(int *mpcTable, ControlFSMData<float> &da
   //t2.stopPrint("Run MPC");
   //printf("MPC Solve time %f ms\n", t2.getMs());
 
+  /*（7）将世界坐标下力转换到机体坐标下*/
   for(int leg = 0; leg < 4; leg++)
   {
     Vec3<float> f;
     for(int axis = 0; axis < 3; axis++)
-      f[axis] = get_solution(leg*3 + axis);
+      f[axis] = get_solution(leg*3 + axis);                                               //获取索引号的结果
 
     //printf("[%d] %7.3f %7.3f %7.3f\n", leg, f[0], f[1], f[2]);
 
-    f_fforce_[leg] = -seResult.rBody * f;
+    f_fforce_[leg] = -seResult.rBody * f;                                                 //将世界坐标下力转换到机体坐标下
     // Update for WBC
-    rforce_des[leg] = f;
+    rforce_des[leg] = f;                                                                  //给WBC更新力
   }
 }
 
+// 解算sparseMPC，得到足端反作用力
 void ConvexMPCLocomotion::SolveSparseMPC(int *mpcTable, ControlFSMData<float> &data) {
   // X0, contact trajectory, state trajectory, feet, get result!
   (void)mpcTable;
@@ -1080,15 +1127,16 @@ void ConvexMPCLocomotion::SolveSparseMPC(int *mpcTable, ControlFSMData<float> &d
   }
 }
 
+// 初始化稀疏MPC
 void ConvexMPCLocomotion::InitSparseMPC() {
-  Mat3<double> baseInertia;
+  Mat3<double> baseInertia; // 定义机体惯性
   baseInertia << 0.07, 0, 0,
               0, 0.26, 0,
               0, 0, 0.242;
-  double mass = 9;
+  double mass = 9; // 定义质量
 
   /// Mod Begin by wuchunming, 2021-03-10, add BZL parameter
-  double maxForce = rforce_max_;
+  double maxForce = rforce_max_; // 定义最大扭矩
   /// origin code
   //double maxForce = 120;
   /// Mod End
@@ -1098,7 +1146,7 @@ void ConvexMPCLocomotion::InitSparseMPC() {
     dtTraj.push_back(dt_mpc_);
   }
 
-  Vec12<double> weights;
+  Vec12<double> weights; // 定义权重
 
   /// Mod Begin by wuchunming, 2021-03-10, add BZL parameter
   //for(int i=0;i<3;++i)
@@ -1115,16 +1163,16 @@ void ConvexMPCLocomotion::InitSparseMPC() {
 
   //weights << 0,0,0,1,1,10,0,0,0,0.2,0.2,0;
 
-  sparse_cmpc_.setRobotParameters(baseInertia, mass, maxForce);
+  sparse_cmpc_.setRobotParameters(baseInertia, mass, maxForce); // 设置机器人参数
 
   /// Mod Begin by wuchunming, 2021-03-10, add BZL parameter
-  sparse_cmpc_.setFriction(mu_);
+  sparse_cmpc_.setFriction(mu_); // 设置摩擦系数
   /// origin code
   //sparse_cmpc_.setFriction(0.4);
   /// Mod End
 
-  sparse_cmpc_.setWeights(weights, 4e-5);
-  sparse_cmpc_.setDtTrajectory(dtTraj);
+  sparse_cmpc_.setWeights(weights, 4e-5); // 设置权重
+  sparse_cmpc_.setDtTrajectory(dtTraj); // 设置轨迹
 
   sparse_traj_.resize(horizon_length_);
 }

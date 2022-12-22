@@ -15,10 +15,9 @@
  * @param _controlFSMData holds all of the relevant control data
  */
 template <typename T>
-FSM_State_BackFlip<T>::FSM_State_BackFlip(ControlFSMData<T>* _controlFSMData, 
-                       FSM_StateName stateNameIn, const std::string &stateStringIn)
+FSM_State_BackFlip<T>::FSM_State_BackFlip(ControlFSMData<T>* _controlFSMData)
   ///Mod by Peibo,2021-08-04,fix the wrong state name
-    : FSM_State<T>(_controlFSMData, stateNameIn, stateStringIn){
+    : FSM_State<T>(_controlFSMData, FSM_StateName::BACKFLIP, "BACKFLIP"){
   ///Ori Code:
   //: FSM_State<T>(_controlFSMData, FSM_StateName::STAND_UP, "STAND_UP"){
   ///Mod End
@@ -45,7 +44,7 @@ FSM_State_BackFlip<T>::FSM_State_BackFlip(ControlFSMData<T>* _controlFSMData,
 
 
 template <typename T>
-BT::NodeStatus FSM_State_BackFlip<T>::onStart() {
+void FSM_State_BackFlip<T>::onEnter() {
   // Default is to not transition
   this->nextStateName = this->stateName;
 
@@ -72,15 +71,14 @@ BT::NodeStatus FSM_State_BackFlip<T>::onStart() {
   /// Add Begin by wuchunming, 2021-05-20, add Finish Flag and fix backflip bug;
   _isSafeLanding = false;
   /// Add End
-
-  return BT::NodeStatus::RUNNING;
+  this->transitionErrorMode = 0;
 }
 
 /**
  * Calls the functions to be executed on each control loop iteration.
  */
 template <typename T>
-BT::NodeStatus FSM_State_BackFlip<T>::onRunning() {
+void FSM_State_BackFlip<T>::run() {
   /// Add  Begin by peibo zhaoyudong,  2020-04-06, Add the preparation operation in the back flip mode 
   //and extract the key parameters to the parameter table
 	backflip_ctrl_->backfilp_tuck_iteration = this->_data->userParameters->backfilp_tuck_iteration;
@@ -111,7 +109,6 @@ BT::NodeStatus FSM_State_BackFlip<T>::onRunning() {
   ++_count;
   _curr_time += this->_data->controlParameters->controller_dt;
 
-  return BT::NodeStatus::RUNNING;
 }
 
 
@@ -274,6 +271,10 @@ FSM_StateName FSM_State_BackFlip<T>::checkTransition() {
       this->nextStateName = FSM_StateName::PASSIVE;
       break;
 
+    case K_DAMP:
+      this->nextStateName = FSM_StateName::DAMP;
+      break;
+
     case K_BALANCE_STAND: 
       this->nextStateName = FSM_StateName::BALANCE_STAND;
       break;
@@ -307,6 +308,11 @@ TransitionData<T> FSM_State_BackFlip<T>::transition() {
     case FSM_StateName::PASSIVE:  // normal
       this->transitionData.done = true;
       break;
+
+    case FSM_StateName::DAMP:  // normal
+      this->transitionData.done = true;
+      break;
+      
     /// Mod Begin by peibo, 2021-09-06, add whether to turn on the delayed back flip flag and modify the back flip transition mode
     case FSM_StateName::BALANCE_STAND:
 
@@ -316,7 +322,7 @@ TransitionData<T> FSM_State_BackFlip<T>::transition() {
       this->transitionData.done = _isSafeLanding;
       if(_isSafeLanding == false)
       {
-        // run();
+        run();
       }
       break;
     // Ori Code:
@@ -345,7 +351,7 @@ TransitionData<T> FSM_State_BackFlip<T>::transition() {
  * Cleans up the state information on exiting the state.
  */
 template <typename T>
-void FSM_State_BackFlip<T>::onHalted() {
+void FSM_State_BackFlip<T>::onExit() {
   // nothing to clean up?
   /// Mod Begin by peibo, 2021-09-06, add whether to turn on the delayed back flip flag and modify the back flip transition mode
   // Ori Code:

@@ -1,11 +1,3 @@
-/*
- * @Author: your name
- * @Date: 2021-10-26 20:45:22
- * @LastEditTime: 2021-12-22 15:34:18
- * @LastEditors: Please set LastEditors
- * @Description: In User Settings Edit
- * @FilePath: /Cheetah_BT_test/user/BZL_Controller/FSM_States/SafetyChecker.h
- */
 #ifndef SAFETY_CHECKER_H
 #define SAFETY_CHECKER_H
 
@@ -14,22 +6,13 @@
 // Contains all of the control related data
 #include "ControlFSMData.h"
 
-#include "../FSM_States/behavior_controller.h"
-
 /**
  * The SafetyChecker handles the checks requested by the ControlFSM.
  */
 template <typename T>
-class SafetyChecker : public BZL::ActionNodeBase{
+class SafetyChecker {
  public:
-  SafetyChecker(ControlFSMData<T>* dataIn, const std::string &stateStringIn) 
-    : BZL::ActionNodeBase(stateStringIn), data(dataIn){}
-
-  BT::NodeStatus tick() override final{
-      return BT::NodeStatus::SUCCESS;
-  }
-
-  void halt() override final{}
+  SafetyChecker(ControlFSMData<T>* dataIn) : data(dataIn){};
 
   // Pre checks to make sure controls are safe to run
   bool checkSafeOrientation();  // robot's orientation is safe to control

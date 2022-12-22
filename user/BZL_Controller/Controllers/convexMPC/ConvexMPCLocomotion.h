@@ -21,13 +21,14 @@
 using Eigen::Array4f;
 using Eigen::Array4i;
 
-
+/*CMPC结果变量*/
 template<typename T>
 struct CMPC_Result {
-  LegControllerCommand<T> commands[4];
-  Vec4<T> contactPhase;
+  LegControllerCommand<T> commands[4];                                                        //四条腿的反作用力
+  Vec4<T> contactPhase;                                                                       //接触支撑腿的状态
 };
 
+/*凸MPC跳跃*/
 struct CMPC_Jump {
   static constexpr int START_SEG = 6;
   static constexpr int END_SEG = 0;
@@ -87,14 +88,14 @@ struct CMPC_Jump {
   }
 };
 
-
+/*凸MPC运动*/
 class ConvexMPCLocomotion {
 public:
   EIGEN_MAKE_ALIGNED_OPERATOR_NEW
 
   ConvexMPCLocomotion(float _dt, int _iterations_between_mpc, BZL_UserParameters* parameters);
 
-  void Initialize();
+  void Initialize();                                                                                              //（1）初始化MPC函数
   void SetParams(BZL_UserParameters* parameters);
 
   /// Add Begin by peibo, 2021-06-03,repair: when you enter the recovery standing mode, the body will shake
@@ -102,7 +103,7 @@ public:
   /// Add End 
 
   template<typename T>
-  void Run(ControlFSMData<T>& data);
+  void Run(ControlFSMData<T>& data);                                                                              //（2）MPC运行过程函数（重点）
   bool currently_jumping_ = false;
 
   Vec3<float> pos_body_des;
@@ -112,7 +113,7 @@ public:
   Vec3<float> pos_body_rpy_des;
   Vec3<float> vel_body_rpy_des;
 
-  Vec3<float> pos_foot_world_des[4];
+  Vec3<float> pos_foot_world_des[4];                                                                              // 足端期望 足端轨迹跟踪用
   Vec3<float> vel_foot_world_des[4];
   Vec3<float> acc_foot_world_des[4];
 
@@ -124,7 +125,7 @@ private:
   BZL_QUADRUPED::Logger _logger;
   void SetupCommand(ControlFSMData<float> & data);
 
-  float yaw_turn_rate_;
+  float yaw_turn_rate_;                                                                                         // 期望 机体下
   float yaw_des_;
 
   float roll_des_;
@@ -138,15 +139,15 @@ private:
   float body_height_ = 0.29;
   float body_height_jumping_ = 0.36;
 
-  void RecomputeTiming(int iterations_per_mpc);
-  void UpdateMPCIfNeeded(int* mpcTable, ControlFSMData<float>& data, bool omniMode);
-  void SolveDenseMPC(int *mpcTable, ControlFSMData<float> &data);
-  void SolveSparseMPC(int *mpcTable, ControlFSMData<float> &data);
-  void InitSparseMPC();
-  int iters_between_mpc_;
-  int horizon_length_;
-  int default_iters_between_mpc_;
-  float dt_;
+  void RecomputeTiming(int iterations_per_mpc);                                                                 //（3）重新计算时间函数
+  void UpdateMPCIfNeeded(int* mpcTable, ControlFSMData<float>& data, bool omniMode);                            //（4）更新MPC数据函数
+  void SolveDenseMPC(int *mpcTable, ControlFSMData<float> &data);                                               //（5）解稠密MPC函数
+  void SolveSparseMPC(int *mpcTable, ControlFSMData<float> &data);                                              //（6）解稀疏MPC函数
+  void InitSparseMPC();                                                                                         //（7）初始化稀疏MPC函数
+  int iters_between_mpc_;                                                                                       //迭代次数在mpc之间
+  int horizon_length_;                                                                                          //mpc分段数，即预测多少个mpc周期长的输入
+  int default_iters_between_mpc_;                                                                               //默认迭代次数在mpc之间
+  float dt_;                                                                                                    //一般频率下时间间隔
   
   /// Add Begin by zhaobo, lihao, 2020-03-03, add BZL parameters, mod mpc algorithm
   int iters_between_gait_seg_;
@@ -163,10 +164,10 @@ private:
   FootTrajectoryPlanType foot_traj_plan_type_;
   /// Add End
 
-  float dt_mpc_;
-  int iter_counter_ = 0;
-  Vec3<float> f_fforce_[4];
-  Vec4<float> swing_times_;
+  float dt_mpc_;                                                                                                //mpc运算周期
+  int iter_counter_ = 0;                                                                                        //频率控制计数器
+  Vec3<float> f_fforce_[4];                                                                                     //四脚力输出
+  Vec4<float> swing_times_;                                                                                     //摆动时间
   FootSwingTrajectory<float> foot_swing_traj_[4];
   /// Mod Begin by  zhaoyudong peibo, 2021-02-25, add triangle gait 
   OffsetDurationGait trotting_, bounding_, pronking_, jumping_, galloping_, standing_, trot_running_, walking_, walking2_, pacing_\
@@ -176,19 +177,19 @@ private:
   /// Mod End
   MixedFrequncyGait random_, random2_;
   Mat3<float> Kp_, Kd_, Kp_stance_, Kd_stance_;
-  bool first_run_ = true;
-  bool first_swing_[4];
-  float swing_time_remaining_[4];
+  bool first_run_ = true;                                                                                       //首次运行
+  bool first_swing_[4];                                                                                         //首次摆动
+  float swing_time_remaining_[4];                                                                               //剩余摆动时间
   float stand_traj_[6];
-  int current_gait_;
-  int gait_number_;
+  int current_gait_;                                                                                            //当前步态
+  int gait_number_;                                                                                             //步态
 
-  Vec3<float> world_pos_des_;
-  Vec3<float> rpy_integral_;
+  Vec3<float> world_pos_des_;                                                                                   //机体期望位置
+  Vec3<float> rpy_integral_;                                                                                    //初始欧拉角
   Vec3<float> rpy_compensate_;
   float x_comp_integral_ = 0;
-  Vec3<float> pos_foot_world_[4];
-  float trajAll_[12*36];
+  Vec3<float> pos_foot_world_[4];                                                                               //四足端坐标
+  float trajAll_[12*36];                                                                                        //mpc格式储存轨迹
 
   BZL_UserParameters* params_ = nullptr;
   CMPC_Jump jump_state_;

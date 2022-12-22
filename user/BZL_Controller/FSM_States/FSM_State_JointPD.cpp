@@ -13,15 +13,14 @@
  * @param _controlFSMData holds all of the relevant control data
  */
 template <typename T>
-FSM_State_JointPD<T>::FSM_State_JointPD(ControlFSMData<T>* _controlFSMData, 
-	FSM_StateName stateNameIn, const std::string &stateStringIn)
-    : FSM_State<T>(_controlFSMData, stateNameIn, stateStringIn),
+FSM_State_JointPD<T>::FSM_State_JointPD(ControlFSMData<T>* _controlFSMData)
+    : FSM_State<T>(_controlFSMData, FSM_StateName::JOINT_PD, "JOINT_PD"),
 _ini_jpos(cheetah::num_act_joint){
   // Do nothing here yet
 }
 
 template <typename T>
-BT::NodeStatus FSM_State_JointPD<T>::onStart() {
+void FSM_State_JointPD<T>::onEnter() {
   // Default is to not transition
   this->nextStateName = this->stateName;
 
@@ -36,15 +35,14 @@ BT::NodeStatus FSM_State_JointPD<T>::onStart() {
       _ini_jpos[3*leg + jidx] = FSM_State<T>::_data->_legController->datas[leg].q[jidx];
     }
   }
-  
-  return BT::NodeStatus::RUNNING;
+  this->transitionErrorMode = 0;
 }
 
 /**
  * Calls the functions to be executed on each control loop iteration.
  */
 template <typename T>
-BT::NodeStatus FSM_State_JointPD<T>::onRunning() {
+void FSM_State_JointPD<T>::run() {
   // This is just a test, should be running whatever other code you want
   Vec3<T> qDes;
   qDes << 0, -1.052, 2.63;
@@ -61,8 +59,6 @@ BT::NodeStatus FSM_State_JointPD<T>::onRunning() {
   this->jointPDControl(1, ratio*qDes + (1. - ratio)*_ini_jpos.segment(3, 3), qdDes);
   this->jointPDControl(2, ratio*qDes + (1. - ratio)*_ini_jpos.segment(6, 3), qdDes);
   this->jointPDControl(3, ratio*qDes + (1. - ratio)*_ini_jpos.segment(9, 3), qdDes);
-
-  return BT::NodeStatus::RUNNING;
 }
 
 /**
@@ -111,6 +107,11 @@ FSM_StateName FSM_State_JointPD<T>::checkTransition() {
       // Transition time is immediate
       this->transitionDuration = 0.0;
 
+      break;
+
+    case K_DAMP:  // normal c
+      this->nextStateName = FSM_StateName::DAMP;
+      this->transitionDuration = 0.0;
       break;
 
     default:
@@ -165,6 +166,13 @@ TransitionData<T> FSM_State_JointPD<T>::transition() {
 
       break;
 
+    case FSM_StateName::DAMP:
+      this->turnOffAllSafetyChecks();
+
+      this->transitionData.done = true;
+
+      break;
+
     default:
       QUADRUPED_WARN(_logger, "Bad Request: Cannot transition from %d to %d",
         K_JOINT_PD, (int)this->_data->controlParameters->control_mode);
@@ -180,7 +188,7 @@ TransitionData<T> FSM_State_JointPD<T>::transition() {
  * Cleans up the state information on exiting the state.
  */
 template <typename T>
-void FSM_State_JointPD<T>::onHalted() {
+void FSM_State_JointPD<T>::onExit() {
   // Nothing to clean up when exiting
 }
 

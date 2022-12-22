@@ -14,30 +14,28 @@
  */
 template <typename T>
 FSM_State_ImpedanceControl<T>::FSM_State_ImpedanceControl(
-    ControlFSMData<T>* _controlFSMData, 
-	FSM_StateName stateNameIn, const std::string &stateStringIn)
-    : FSM_State<T>(_controlFSMData, stateNameIn,
-                   stateStringIn) {
+    ControlFSMData<T>* _controlFSMData)
+    : FSM_State<T>(_controlFSMData, FSM_StateName::IMPEDANCE_CONTROL,
+                   "IMPEDANCE_CONTROL") {
   // Do nothing here yet
 }
 
 template <typename T>
-BT::NodeStatus FSM_State_ImpedanceControl<T>::onStart() {
+void FSM_State_ImpedanceControl<T>::onEnter() {
   // Default is to not transition
   this->nextStateName = this->stateName;
 
   // Reset the transition data
   this->transitionData.zero();
-  return BT::NodeStatus::RUNNING;
+  this->transitionErrorMode = 0;
 }
 
 /**
  * Calls the functions to be executed on each control loop iteration.
  */
 template <typename T>
-BT::NodeStatus FSM_State_ImpedanceControl<T>::onRunning() {
+void FSM_State_ImpedanceControl<T>::run() {
   // Do nothing, all commands should begin as zeros
-  return BT::NodeStatus::RUNNING;
 }
 
 /**
@@ -98,7 +96,7 @@ TransitionData<T> FSM_State_ImpedanceControl<T>::transition() {
  * Cleans up the state information on exiting the state.
  */
 template <typename T>
-void FSM_State_ImpedanceControl<T>::onHalted() {
+void FSM_State_ImpedanceControl<T>::onExit() {
   // Nothing to clean up when exiting
 }
 

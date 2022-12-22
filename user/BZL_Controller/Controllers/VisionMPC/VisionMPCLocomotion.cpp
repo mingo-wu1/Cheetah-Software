@@ -401,61 +401,79 @@ void VisionMPCLocomotion::run(ControlFSMData<float>& data,
 
   Vec4<float> se_contactState(0,0,0,0);
 
+  // 【C控制范畴】依次遍历四条腿进行解算，解算完成四条腿的控制指令一起发送给腿部控制器，保证控制是同步的
+  // 注意这里的控制输入没有足端反作用力和关节KD参数，但是支撑相是有的，因为腿部控制器是对四条腿进行同时控制的（遍历的解算时候是单条腿解算，解算完成四条腿的控制指令一起发送给腿部控制器，保证控制是同步的）
+  // 这里是否是接触状态在上面的步态gait就已经实现了，这里仅仅调用结果就可以
   for(int foot = 0; foot < 4; foot++)
-  {
-    float contactState = contactStates[foot];
-    float swingState = swingStates[foot];
+  { /*（1）判断当前脚处于支撑状态还是摆动状态*/
+    float contactState = contactStates[foot];                                                 //在整个支撑过程百分比(从0到1)
+    float swingState = swingStates[foot];                                                     //在整个摆动过程百分比(从0到1)
+    // 原理:使用贝塞尔曲线对足端的轨迹进行规划，输出足端的位置轨迹和速度轨迹，然后把位置、速度、增益Kp/Kd作为控制输入，发送给WBC执行或者腿部控制器执行
+    // 原理:注意这里的控制输入没有足端反作用力和关节KD参数，但是支撑相是有的，因为腿部控制器是对四条腿进行同时控制的（遍历的解算时候是单条腿解算，解算完成四条腿的控制指令一起发送给腿部控制器)
     if(swingState > 0) // foot is in swing
     {
-      if(firstSwing[foot])
+      if(firstSwing[foot])                                                                    //（1）若刚从支撑相切换到摆动相
       {
-        firstSwing[foot] = false;
-        footSwingTrajectories[foot].setInitialPosition(pFoot[foot]);
+        firstSwing[foot] = false;                                                             // 标志位置0
+        footSwingTrajectories[foot].setInitialPosition(pFoot[foot]);                          // 初始化设置起始点为原点 
       }
       footSwingTrajectories[foot].setHeight(_fin_foot_loc[foot][2]+0.04);
-      footSwingTrajectories[foot].computeSwingTrajectoryBezier(swingState, swingTimes[foot]);
-
-      Vec3<float> pDesFootWorld = footSwingTrajectories[foot].getPosition();
-      Vec3<float> vDesFootWorld = footSwingTrajectories[foot].getVelocity();
-      Vec3<float> pDesLeg = seResult.rBody * (pDesFootWorld - seResult.position) 
+      footSwingTrajectories[foot].computeSwingTrajectoryBezier(swingState, swingTimes[foot]); //（2）使用贝塞尔曲线，计算腿部足端轨迹,  //输入参数：当前在摆动相的位置，摆动相时间长度
+      
+      //（3）获得足端轨迹位置点和速度点
+      Vec3<float> pDesFootWorld = footSwingTrajectories[foot].getPosition();                   // 获得轨迹位置点
+      Vec3<float> vDesFootWorld = footSwingTrajectories[foot].getVelocity();                   // 获得轨迹速度点
+      //（4）足端轨迹位置点和速度点先转换到机体坐标系下，然后再转到hip关节坐标系下
+      Vec3<float> pDesLeg = seResult.rBody * (pDesFootWorld - seResult.position)               //先转换到机体坐标系等同于到机体坐标系下
         - data._quadruped->getHipLocation(foot);
-      Vec3<float> vDesLeg = seResult.rBody * (vDesFootWorld - seResult.vWorld);
+      Vec3<float> vDesLeg = seResult.rBody * (vDesFootWorld - seResult.vWorld);                //再转换到机体坐标系等同于到髋关节坐标系下
 
-
+      //（5）【默认使用wbc控制】为wbc控制更新参数，参数包括腿部位置、腿部速度、腿部加速度
       // Update for WBC
       pFoot_des[foot] = pDesFootWorld;
       vFoot_des[foot] = vDesFootWorld;
       aFoot_des[foot] = footSwingTrajectories[foot].getAcceleration();
 
-      if(!data.userParameters->use_wbc){
-        data._legController->commands[foot].pDes = pDesLeg;
-        data._legController->commands[foot].vDes = vDesLeg;
-        data._legController->commands[foot].kpCartesian = Kp;
-        data._legController->commands[foot].kdCartesian = Kd;
+      //（6）判断是否使用WBC控制
+      if(!data.userParameters->use_wbc){                                                        //若不使用WBC,直接发送腿部控制命令到腿部控制器
+        //不管WBIC的使用情况如何，更新腿部控制命令都是这几个  //用腿部控制器控制腿部的运动
+        data._legController->commands[foot].pDes = pDesLeg;                                     //腿部期望位置
+        data._legController->commands[foot].vDes = vDesLeg;                                     //腿部期望速度
+        data._legController->commands[foot].kpCartesian = Kp;                                   //腿部KP增益
+        data._legController->commands[foot].kdCartesian = Kd;                                   //腿部KD增益
 
         //singularity barrier
         data._legController->commands[foot].tauFeedForward[2] = 
           50*(data._legController->datas[foot].q(2)<.1)*data._legController->datas[foot].q(2);
       }
     }
+
+//原理
+//使用贝塞尔曲线对足端的轨迹进行规划，输出足端的位置轨迹和速度轨迹，然后把位置、速度、增益Kp/Kd作为控制输入发送给WBC执行或者腿部控制器执行
+//摆动腿使用贝塞尔曲线对足端的轨迹进行规划，输出足端的位置轨迹和速度轨迹
+//支撑腿通过MPC计算出足端的反作用力
+//然后把位置、速度、增益Kp/Kd、反作用力、关节Kd参数作为控制输入，发送给WBC执行或者腿部控制器执行
+//注意支撑相的控制输入是有足端反作用力和关节KD参数的，因为腿部控制器是对四条腿进行同时控制的（遍历的解算时候是单条腿解算，解算完成四条腿的控制指令一起发送给腿部控制器)
+
     else // foot is in stance
     {
-      firstSwing[foot] = true;
-
-      Vec3<float> pDesFootWorld = footSwingTrajectories[foot].getPosition();
-      Vec3<float> vDesFootWorld = footSwingTrajectories[foot].getVelocity();
-      Vec3<float> pDesLeg = seResult.rBody * (pDesFootWorld - seResult.position) - data._quadruped->getHipLocation(foot);
-      Vec3<float> vDesLeg = seResult.rBody * (vDesFootWorld - seResult.vWorld);
+      firstSwing[foot] = true;                                                                  //设置刚从摆动相切换到支撑相状态
+      //（1）根据运动学坐标转换，通过摆动腿的位置和速度计算，足端的位置和速度
+      Vec3<float> pDesFootWorld = footSwingTrajectories[foot].getPosition();                    //获取摆动腿的位置
+      Vec3<float> vDesFootWorld = footSwingTrajectories[foot].getVelocity();                    //获取摆动腿的速度
+      Vec3<float> pDesLeg = seResult.rBody * (pDesFootWorld - seResult.position) - data._quadruped->getHipLocation(foot); //计算腿部足端位置
+      Vec3<float> vDesLeg = seResult.rBody * (vDesFootWorld - seResult.vWorld);                                           //计算腿部足端速度
       //cout << "Foot " << foot << " relative velocity desired: " << vDesLeg.transpose() << "\n";
 
+      //（2）若未使用WBC 发送数据到腿部控制器
       if(!data.userParameters->use_wbc){
-        data._legController->commands[foot].pDes = pDesLeg;
-        data._legController->commands[foot].vDes = vDesLeg;
-        data._legController->commands[foot].kpCartesian = Kp_stance;
-        data._legController->commands[foot].kdCartesian = Kd_stance;
+        data._legController->commands[foot].pDes = pDesLeg;                                     //四条腿腿部期望位置命令
+        data._legController->commands[foot].vDes = vDesLeg;                                     //四条腿腿部期望速度命令
+        data._legController->commands[foot].kpCartesian = Kp_stance;                            //四条腿腿部KP参数命令
+        data._legController->commands[foot].kdCartesian = Kd_stance;                            //四条腿腿部KD参数命令
 
-        data._legController->commands[foot].forceFeedForward = f_ff[foot];
-        data._legController->commands[foot].kdJoint = Mat3<float>::Identity() * 0.2;
+        data._legController->commands[foot].forceFeedForward = f_ff[foot];                      //四条腿腿部反作用力命令
+        data._legController->commands[foot].kdJoint = Mat3<float>::Identity() * 0.2;            //关节KD参数命令
       }
       se_contactState[foot] = contactState;
     }

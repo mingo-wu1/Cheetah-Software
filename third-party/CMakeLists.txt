@@ -9,7 +9,6 @@ add_subdirectory(SOEM)
 add_subdirectory(lpmsig1_interface)
 add_subdirectory(stick_gamepad)
 add_subdirectory(CSerialPort)
-#add_subdirectory(BehaviorTree.CPP)
 
 if(USE_LPMSUSBAL2)
 add_subdirectory(lpmsusbal2_interface)
