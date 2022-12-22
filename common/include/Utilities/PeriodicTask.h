@@ -11,6 +11,8 @@
 #include <thread>
 #include <vector>
 
+#include "Logger/Logger.h"
+
 class PeriodicTaskManager;
 
 /*!
@@ -61,6 +63,7 @@ class PeriodicTask {
   float _maxRuntime = 0;
   std::string _name;
   std::thread _thread;
+  BZL_QUADRUPED::Logger _logger;
 };
 
 /*!

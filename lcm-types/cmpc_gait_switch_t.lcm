@@ -1,0 +1,5 @@
+struct cmpc_gait_switch_t
+{
+    boolean open_gait_switch;
+    int32_t cur_gait_number;
+}

@@ -56,9 +56,75 @@ void DesiredStateCommand<T>::convertToStateCommands() {
       joystickRight.setZero();
     }
   } else { // No Remote Controller
+    /// Mod Begin by wuchunming, 2021-03-06, add gamepad command
+    joystickLeft[0] = gamepadCommand->leftStickAnalog[0];
+    joystickLeft[1] = gamepadCommand->leftStickAnalog[1];
+    joystickRight[0] = gamepadCommand->rightStickAnalog[0];
+    joystickRight[1] = gamepadCommand->rightStickAnalog[1];
+    /*origin code
     joystickLeft = gamepadCommand->leftStickAnalog;
     joystickRight = gamepadCommand->rightStickAnalog;
     trigger_pressed = gamepadCommand->a;
+    */
+    /// Mod End
+
+    /// Add Begin by peibo, 2021-01-21, add handle gamepadCommand support code 
+    if(gamepadCommand->start)
+    {
+      rcCommand->mode = RC_mode::STAND_UP;
+    }
+    else if(gamepadCommand->b)
+    {
+      rcCommand->mode = RC_mode::RECOVERY_STAND;
+    }
+    else if(gamepadCommand->x)
+    {
+      rcCommand->mode = RC_mode::QP_STAND;
+    }
+    else if(gamepadCommand->y)
+    {
+      rcCommand->mode = RC_mode::BACKFLIP;
+    }
+    /// Mod Begin by peibo 2021-04-29,adding stair operation
+    else if(gamepadCommand->leftBumper || gamepadCommand->back)
+    /// Ori Code:
+	  //else if (gamepadCommand->leftBumper)
+    /// Mod End
+    {
+      rcCommand->mode = RC_mode::LOCOMOTION;
+    }
+    else if(gamepadCommand->a)
+    {
+      rcCommand->mode = RC_mode::PRONE;
+    }
+    /// Add End
+    /// Add Begin by wuchunming, 2021-05-28, mod gait with leftTriggerButton and fix bugs.
+    static bool isNextGait = true;
+    static unsigned int gaitIndex = 0;
+    static unsigned int gaitNum[3] = { 9,1,2 };
+    static unsigned int cur_time = 0;
+    const static int timeMin = 20;
+    static bool allowChangeGait = 0;
+    if(RC_mode::RECOVERY_STAND == rcCommand->mode)
+      allowChangeGait = true;
+    else if(0 == rcCommand->mode)
+      allowChangeGait = allowChangeGait;
+    else
+      allowChangeGait = false;
+    if (gamepadCommand->leftTriggerButton < 0.2)
+    {
+    	cur_time++;
+    	if (cur_time > timeMin)
+    		isNextGait = true;
+    }
+    else if(gamepadCommand->leftTriggerButton  > 0.8 && allowChangeGait && isNextGait)
+    {
+    	isNextGait = false;
+    	if (++gaitIndex >= (sizeof(gaitNum) / sizeof(gaitNum[0])))
+    		gaitIndex = 0;
+    }
+    rcCommand->variable[0] = (double)(gaitNum[gaitIndex]);
+    /// Add End
   }
   // Warning!!!!
   // Recommend not to use stateDes

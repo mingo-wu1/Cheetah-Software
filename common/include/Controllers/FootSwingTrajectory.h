@@ -55,6 +55,14 @@ public:
 
   void computeSwingTrajectoryBezier(T phase, T swingTime);
 
+  /// Add Begin yuzhiyou, peibo, 2021-04-23, add select for selecting foot trajectory plan, polynomial algorithm
+  /*!
+   * @brief foot trajectory plan, polynomial algorithm
+   */
+  void computeSwingTrajectoryBezierForStair(T phase, T swingTime);
+  void computeSwingTrajectoryPolynomial(T phase, T swingTime, Eigen::Matrix<T, 5, 1>& Pos, Eigen::Matrix<T, 5, 1>& Time, Vec3<T>& pva);
+  /// Add End
+
   /*!
    * Get the foot position at the current point along the swing
    * @return : the foot position

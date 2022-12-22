@@ -1,0 +1,3 @@
+struct i2c_data_lcmt {
+   int16_t data[4];
+}

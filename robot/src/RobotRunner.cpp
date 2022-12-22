@@ -22,7 +22,8 @@ RobotRunner::RobotRunner(RobotController* robot_ctrl,
     PeriodicTaskManager* manager, 
     float period, std::string name):
   PeriodicTask(manager, period, name),
-  _lcm(getLcmUrl(255)) {
+  _lcm(getLcmUrl(1)),
+  _logger("RobotRunner") {
 
     _robot_ctrl = robot_ctrl;
   }
@@ -32,11 +33,19 @@ RobotRunner::RobotRunner(RobotController* robot_ctrl,
  * robot data, and any control logic specific data.
  */
 void RobotRunner::init() {
-  printf("[RobotRunner] initialize\n");
+  QUADRUPED_INFO(_logger, "initialize");
 
   // Build the appropriate Quadruped object
   if (robotType == RobotType::MINI_CHEETAH) {
+#if (USE_RS485_A1 == 1)
+    _quadruped = buildMiniCheetahRs485A1<float>();
+#elif (USE_LINKAGE == 1)
+    _quadruped = buildMiniCheetahLinkage<float>();
+#elif (USE_LINKAGE_INDUSTRIAL == 1)
+    _quadruped = buildMiniCheetahLinkageIndustrial<float>();
+#else
     _quadruped = buildMiniCheetah<float>();
+#endif
   } else {
     _quadruped = buildCheetah3<float>();
   }
@@ -67,11 +76,15 @@ void RobotRunner::init() {
   _robot_ctrl->_legController = _legController;
   _robot_ctrl->_stateEstimator = _stateEstimator;
   _robot_ctrl->_stateEstimate = &_stateEstimate;
-  _robot_ctrl->_visualizationData= visualizationData;
+  _robot_ctrl->_visualizationData = visualizationData;
   _robot_ctrl->_robotType = robotType;
   _robot_ctrl->_driverCommand = driverCommand;
   _robot_ctrl->_controlParameters = controlParameters;
   _robot_ctrl->_desiredStateCommand = _desiredStateCommand;
+
+  /// Add Begin by wuchunming, 20210716, add serialport pressure sensor
+  _robot_ctrl->sensorData_ = sensorData_;
+  /// Add End
 
   _robot_ctrl->initializeController();
 
@@ -103,19 +116,28 @@ void RobotRunner::run() {
     _legController->setEnabled(true);
 
     if( (rc_control.mode == 0) && controlParameters->use_rc ) {
-      if(count_ini%1000 ==0)   printf("ESTOP!\n");
+      if(count_ini%1000 ==0)   QUADRUPED_INFO(_logger, "ESTOP!");
       for (int leg = 0; leg < 4; leg++) {
         _legController->commands[leg].zero();
       }
       _robot_ctrl->Estop();
     }else {
       // Controller
-      if (!_jpos_initializer->IsInitialized(_legController)) {
+      bool use_jpos_initializer = true;
+#if (USE_LINKAGE_INDUSTRIAL == 1) 
+      use_jpos_initializer = false;
+#endif
+      if (true == use_jpos_initializer && !_jpos_initializer->IsInitialized(_legController)) {
         Mat3<float> kpMat;
         Mat3<float> kdMat;
         // Update the jpos feedback gains
         if (robotType == RobotType::MINI_CHEETAH) {
+/// Change by hanyuanqiang, 2021-08-10, Add unitree RS485 A1 motor parameters
+#if (USE_RS485_A1 == 1)
+          kpMat << 0.375, 0, 0, 0, 0.375, 0, 0, 0, 0.375;
+#else
           kpMat << 5, 0, 0, 0, 5, 0, 0, 0, 5;
+#endif
           kdMat << 0.1, 0, 0, 0, 0.1, 0, 0, 0, 0.1;
         } else if (robotType == RobotType::CHEETAH_3) {
           kpMat << 50, 0, 0, 0, 50, 0, 0, 0, 50;
@@ -164,7 +186,13 @@ void RobotRunner::run() {
 void RobotRunner::setupStep() {
   // Update the leg data
   if (robotType == RobotType::MINI_CHEETAH) {
+    /// Add Begin by hanyuanqiang, 2021-03-24, Judge whether to configure A1 motor
+#if (USE_RS485_A1 == 1)
+    _legController->updateData(rs485A1Data);
+#else
     _legController->updateData(spiData);
+#endif
+    /// Add End
   } else if (robotType == RobotType::CHEETAH_3) {
     _legController->updateData(tiBoardData);
   } else {
@@ -179,7 +207,7 @@ void RobotRunner::setupStep() {
   // state estimator
   // check transition to cheater mode:
   if (!_cheaterModeEnabled && controlParameters->cheater_mode) {
-    printf("[RobotRunner] Transitioning to Cheater Mode...\n");
+    QUADRUPED_INFO(_logger, "Transitioning to Cheater Mode...");
     initializeStateEstimator(true);
     // todo any configuration
     _cheaterModeEnabled = true;
@@ -187,13 +215,15 @@ void RobotRunner::setupStep() {
 
   // check transition from cheater mode:
   if (_cheaterModeEnabled && !controlParameters->cheater_mode) {
-    printf("[RobotRunner] Transitioning from Cheater Mode...\n");
+    QUADRUPED_INFO(_logger, "Transitioning from Cheater Mode...");
     initializeStateEstimator(false);
     // todo any configuration
     _cheaterModeEnabled = false;
   }
 
-  get_rc_control_settings(&rc_control);
+  /// Commented by hanyuanqiang, 2021-06-18, not used rc_control, conflicts with SDK
+  // get_rc_control_settings(&rc_control);
+  /// Commented end
 
   // todo safety checks, sanity checks, etc...
 }
@@ -203,7 +233,13 @@ void RobotRunner::setupStep() {
  */
 void RobotRunner::finalizeStep() {
   if (robotType == RobotType::MINI_CHEETAH) {
+    /// Add Begin by hanyuanqiang, 2021-03-24, Judge whether to configure A1 motor
+#if (USE_RS485_A1 == 1)
+    _legController->updateCommand(rs485A1Command);
+#else
     _legController->updateCommand(spiCommand);
+#endif
+    /// Add End
   } else if (robotType == RobotType::CHEETAH_3) {
     _legController->updateCommand(tiBoardCommand);
   } else {

@@ -99,6 +99,15 @@ void LegController<T>::updateData(const SpiData* spiData) {
 
     // v
     datas[leg].v = datas[leg].J * datas[leg].qd;
+
+    /// Add Begin by hanyuanqiang, 2021-07-27, Add current feedback of SPIne
+    // tau
+#if (USE_SPI_DATA_CURRENT == 1)
+    datas[leg].tauMeasure(0) = spiData->tau_abad[leg];
+    datas[leg].tauMeasure(1) = spiData->tau_hip[leg];
+    datas[leg].tauMeasure(2) = spiData->tau_knee[leg];
+#endif
+    /// Add End
   }
 }
 
@@ -123,6 +132,45 @@ void LegController<T>::updateData(const TiBoardData* tiBoardData) {
     //printf("%d leg, velocity: %f, %f, %f\n", leg, datas[leg].v[0], datas[leg].v[1], datas[leg].v[2]);
   }
 }
+
+/// Add Begin by hanyuanqiang, 2021-03-24
+/*!
+ * Update the "leg data" from a A1 motor message
+ */
+#if (USE_RS485_A1 == 1)
+template <typename T>
+void LegController<T>::updateData(const Rs485A1Data* rs485A1Data) {
+  for (int leg = 0; leg < 4; leg++) {
+    // q:
+    datas[leg].q(0) = rs485A1Data->q_abad[leg];
+    datas[leg].q(1) = rs485A1Data->q_hip[leg];
+    datas[leg].q(2) = rs485A1Data->q_knee[leg];
+
+    // qd
+    datas[leg].qd(0) = rs485A1Data->qd_abad[leg];
+    datas[leg].qd(1) = rs485A1Data->qd_hip[leg];
+    datas[leg].qd(2) = rs485A1Data->qd_knee[leg];
+
+    // J and p
+    computeLegJacobianAndPosition<T>(_quadruped, datas[leg].q, &(datas[leg].J),
+                                     &(datas[leg].p), leg);
+
+    // v
+    datas[leg].v = datas[leg].J * datas[leg].qd;
+
+    // tau
+    datas[leg].tauMeasure(0) = rs485A1Data->tau_abad[leg];
+    datas[leg].tauMeasure(1) = rs485A1Data->tau_hip[leg];
+    datas[leg].tauMeasure(2) = rs485A1Data->tau_knee[leg];
+
+    // acc
+    datas[leg].acc(0) = rs485A1Data->acc_abad[leg];
+    datas[leg].acc(1) = rs485A1Data->acc_hip[leg];
+    datas[leg].acc(2) = rs485A1Data->acc_knee[leg];
+  }
+}
+#endif
+/// And End
 
 /*!
  * Update the "leg command" for the SPIne board message
@@ -220,6 +268,64 @@ void LegController<T>::updateCommand(TiBoardCommand* tiBoardCommand) {
   }
 }
 
+/// Add Begin by hanyuanqiang, 2021-03-24
+/*!
+ * Update the "leg command" for the A1 motor message
+ */
+#if (USE_RS485_A1 == 1)
+template <typename T>
+void LegController<T>::updateCommand(Rs485A1Command* rs485A1Command) {
+  for (int leg = 0; leg < 4; leg++) {
+    // tauFF
+    Vec3<T> legTorque = commands[leg].tauFeedForward;
+
+    // forceFF
+    Vec3<T> footForce = commands[leg].forceFeedForward;
+
+    // cartesian PD
+    footForce +=
+        commands[leg].kpCartesian * (commands[leg].pDes - datas[leg].p);
+    footForce +=
+        commands[leg].kdCartesian * (commands[leg].vDes - datas[leg].v);
+
+    // Torque
+    legTorque += datas[leg].J.transpose() * footForce;
+
+    // set command:
+    rs485A1Command->tau_abad_ff[leg] = legTorque(0);
+    rs485A1Command->tau_hip_ff[leg] = legTorque(1);
+    rs485A1Command->tau_knee_ff[leg] = legTorque(2);
+
+    // joint space pd
+    // joint space PD
+    rs485A1Command->kd_abad[leg] = commands[leg].kdJoint(0, 0);
+    rs485A1Command->kd_hip[leg] = commands[leg].kdJoint(1, 1);
+    rs485A1Command->kd_knee[leg] = commands[leg].kdJoint(2, 2);
+
+    rs485A1Command->kp_abad[leg] = commands[leg].kpJoint(0, 0);
+    rs485A1Command->kp_hip[leg] = commands[leg].kpJoint(1, 1);
+    rs485A1Command->kp_knee[leg] = commands[leg].kpJoint(2, 2);
+
+    rs485A1Command->q_des_abad[leg] = commands[leg].qDes(0);
+    rs485A1Command->q_des_hip[leg] = commands[leg].qDes(1);
+    rs485A1Command->q_des_knee[leg] = commands[leg].qDes(2);
+
+    rs485A1Command->qd_des_abad[leg] = commands[leg].qdDes(0);
+    rs485A1Command->qd_des_hip[leg] = commands[leg].qdDes(1);
+    rs485A1Command->qd_des_knee[leg] = commands[leg].qdDes(2);
+
+    // estimate torque
+    datas[leg].tauEstimate =
+        legTorque +
+        commands[leg].kpJoint * (commands[leg].qDes - datas[leg].q) +
+        commands[leg].kdJoint * (commands[leg].qdDes - datas[leg].qd);
+
+    rs485A1Command->flags[leg] = _legsEnabled ? 1 : 0;
+  }
+}
+#endif
+/// And End
+
 /*!
  * Set LCM debug data from leg commands and data
  */
@@ -233,6 +339,12 @@ void LegController<T>::setLcm(leg_control_data_lcmt *lcmData, leg_control_comman
             lcmData->p[idx] = datas[leg].p[axis];
             lcmData->v[idx] = datas[leg].v[axis];
             lcmData->tau_est[idx] = datas[leg].tauEstimate[axis];
+#if (USE_RS485_A1 == 1)
+            lcmData->tau_measure[idx] = datas[leg].tauMeasure[axis];
+            lcmData->acc[idx] = datas[leg].acc[axis];
+#elif (USE_SPI_DATA_CURRENT == 1)
+            lcmData->tau_measure[idx] = datas[leg].tauMeasure[axis];
+#endif
 
             lcmCommand->tau_ff[idx] = commands[leg].tauFeedForward[axis];
             lcmCommand->f_ff[idx] = commands[leg].forceFeedForward[axis];

@@ -17,6 +17,9 @@
 #include "Dynamics/Quadruped.h"
 #include "SimUtilities/SpineBoard.h"
 #include "SimUtilities/ti_boardcontrol.h"
+#if (USE_RS485_A1 == 1)
+#include "SimUtilities/Rs485A1Board.h"
+#endif
 
 /*!
  * Data sent from the control algorithm to the legs.
@@ -48,6 +51,13 @@ struct LegControllerData {
   Mat3<T> J;
   Vec3<T> tauEstimate;
   Quadruped<T>* quadruped;
+#if (USE_RS485_A1 == 1)
+  Vec3<T> tauMeasure;
+  Vec3<T> acc;
+  /// Add Begin by hanyuanqiang, 2021-07-27, Add current feedback of SPIne
+#elif (USE_SPI_DATA_CURRENT == 1)
+  Vec3<T> tauMeasure;
+#endif
 };
 
 /*!
@@ -64,8 +74,14 @@ class LegController {
   void edampCommand(RobotType robot, T gain);
   void updateData(const SpiData* spiData);
   void updateData(const TiBoardData* tiBoardData);
+#if (USE_RS485_A1 == 1)
+  void updateData(const Rs485A1Data* rs485A1Data);  // Add by hanyuanqiang, 2021-03-24
+#endif
   void updateCommand(SpiCommand* spiCommand);
   void updateCommand(TiBoardCommand* tiBoardCommand);
+#if (USE_RS485_A1 == 1)
+  void updateCommand(Rs485A1Command* rs485A1Command);  // Add by hanyuanqiang, 2021-03-24
+#endif
   void setEnabled(bool enabled) { _legsEnabled = enabled; };
   void setLcm(leg_control_data_lcmt* data, leg_control_command_lcmt* command);
 

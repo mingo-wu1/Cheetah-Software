@@ -18,6 +18,7 @@
 #include <string>
 
 #include "cTypes.h"
+#include "Logger/Logger.h"
 
 
 #define DEVELOPMENT_SIMULATOR_SHARED_MEMORY_NAME "development-simulator"
@@ -41,8 +42,8 @@ class SharedMemorySemaphore {
   void init(unsigned int value) {
     if (!_init) {
       if (sem_init(&_sem, 1, value)) {
-        printf("[ERROR] Failed to initialize shared memory semaphore: %s\n",
-               strerror(errno));
+        QUADRUPED_ERROR(_logger, 
+          "Failed to initialize shared memory semaphore: %s", strerror(errno));
       } else {
         _init = true;
       }
@@ -94,6 +95,7 @@ class SharedMemorySemaphore {
  private:
   sem_t _sem;
   bool _init = false;
+  BZL_QUADRUPED::Logger _logger = BZL_QUADRUPED::Logger("SharedMemorySemaphore");
 };
 
 /*!
@@ -133,43 +135,42 @@ class SharedMemoryObject {
     assert(!_data);
     _name = name;
     _size = sizeof(T);
-    printf("[Shared Memory] open new %s, size %ld bytes\n", name.c_str(),
-           _size);
+    QUADRUPED_INFO(_logger, "open new %s, size %ld bytes", name.c_str(), _size);
 
     _fd = shm_open(name.c_str(), O_RDWR | O_CREAT, 
                    S_IWUSR | S_IRUSR | S_IWGRP | S_IRGRP | S_IROTH);
      if (_fd == -1) {
-      printf("[ERROR] SharedMemoryObject shm_open failed: %s\n",
-             strerror(errno));
+      QUADRUPED_ERROR(_logger,
+        "shm_open failed: %s", strerror(errno));
       throw std::runtime_error("Failed to create shared memory!");
       return false;
     }
 
     struct stat s;
     if (fstat(_fd, &s)) {
-      printf("[ERROR] SharedMemoryObject::createNew(%s) stat: %s\n",
-             name.c_str(), strerror(errno));
+      QUADRUPED_ERROR(_logger,
+        "createNew(%s) stat: %s", name.c_str(), strerror(errno));
       throw std::runtime_error("Failed to create shared memory!");
       return false;
     }
 
     if (s.st_size) {
-      printf(
-          "[Shared Memory] SharedMemoryObject::createNew(%s) on something that "
-          "wasn't new (size is %ld bytes)\n",
-          _name.c_str(), s.st_size);
+      QUADRUPED_INFO(_logger,
+        "createNew(%s) on something that "
+        "wasn't new (size is %ld bytes)",
+        _name.c_str(), s.st_size);
       hadToDelete = true;
       if (!allowOverwrite)
         throw std::runtime_error(
             "Failed to create shared memory - it already exists.");
 
-      printf("\tusing existing shared memory!\n");
+      QUADRUPED_INFO(_logger, "using existing shared memory!");
       // return false;
     }
 
     if (ftruncate(_fd, _size)) {
-      printf("[ERROR] SharedMemoryObject::createNew(%s) ftruncate(%ld): %s\n",
-             name.c_str(), _size, strerror(errno));
+      QUADRUPED_ERROR(_logger, "createNew(%s) ftruncate(%ld): %s",
+        name.c_str(), _size, strerror(errno));
       throw std::runtime_error("Failed to create shared memory!");
       return false;
     }
@@ -177,8 +178,8 @@ class SharedMemoryObject {
     void* mem =
         mmap(nullptr, _size, PROT_READ | PROT_WRITE, MAP_SHARED, _fd, 0);
     if (mem == MAP_FAILED) {
-      printf("[ERROR] SharedMemory::createNew(%s) mmap fail: %s\n",
-             _name.c_str(), strerror(errno));
+      QUADRUPED_ERROR(_logger, "createNew(%s) mmap fail: %s",
+        _name.c_str(), strerror(errno));
       throw std::runtime_error("Failed to create shared memory!");
       return false;
     }
@@ -199,12 +200,12 @@ class SharedMemoryObject {
     assert(!_data);
     _name = name;
     _size = sizeof(T);
-    printf("[Shared Memory] open existing %s size %ld bytes\n", name.c_str(),
+    QUADRUPED_INFO(_logger, "open existing %s size %ld bytes", name.c_str(),
            _size);
     _fd = shm_open(name.c_str(), O_RDWR,
                    S_IWUSR | S_IRUSR | S_IWGRP | S_IRGRP | S_IROTH);
     if (_fd == -1) {
-      printf("[ERROR] SharedMemoryObject::attach shm_open(%s) failed: %s\n",
+      QUADRUPED_ERROR(_logger, "attach shm_open(%s) failed: %s",
              _name.c_str(), strerror(errno));
       throw std::runtime_error("Failed to create shared memory!");
       return;
@@ -212,17 +213,17 @@ class SharedMemoryObject {
 
     struct stat s;
     if (fstat(_fd, &s)) {
-      printf("[ERROR] SharedMemoryObject::attach(%s) stat: %s\n", name.c_str(),
+      QUADRUPED_ERROR(_logger, "attach(%s) stat: %s", name.c_str(),
              strerror(errno));
       throw std::runtime_error("Failed to create shared memory!");
       return;
     }
 
     if ((size_t)s.st_size != _size) {
-      printf(
-          "[ERROR] SharedMemoryObject::attach(%s) on something that was "
+      QUADRUPED_ERROR(_logger,
+          "attach(%s) on something that was "
           "incorrectly "
-          "sized (size is %ld bytes, should be %ld)\n",
+          "sized (size is %ld bytes, should be %ld)",
           _name.c_str(), s.st_size, _size);
       throw std::runtime_error("Failed to create shared memory!");
       return;
@@ -231,7 +232,7 @@ class SharedMemoryObject {
     void* mem =
         mmap(nullptr, _size, PROT_READ | PROT_WRITE, MAP_SHARED, _fd, 0);
     if (mem == MAP_FAILED) {
-      printf("[ERROR] SharedMemory::attach(%s) mmap fail: %s\n", _name.c_str(),
+      QUADRUPED_ERROR(_logger, "attach(%s) mmap fail: %s", _name.c_str(),
              strerror(errno));
       throw std::runtime_error("Failed to create shared memory!");
       return;
@@ -249,7 +250,7 @@ class SharedMemoryObject {
     assert(_data);
     // first, unmap
     if (munmap((void*)_data, _size)) {
-      printf("[ERROR] SharedMemoryObject::closeNew (%s) munmap %s\n",
+      QUADRUPED_ERROR(_logger, "closeNew (%s) munmap %s",
              _name.c_str(), strerror(errno));
       throw std::runtime_error("Failed to create shared memory!");
       return;
@@ -258,7 +259,7 @@ class SharedMemoryObject {
     _data = nullptr;
 
     if (shm_unlink(_name.c_str())) {
-      printf("[ERROR] SharedMemoryObject::closeNew (%s) shm_unlink %s\n",
+      QUADRUPED_ERROR(_logger, "closeNew (%s) shm_unlink %s",
              _name.c_str(), strerror(errno));
       throw std::runtime_error("Failed to create shared memory!");
       return;
@@ -266,7 +267,7 @@ class SharedMemoryObject {
 
     // close fd
     if (close(_fd)) {
-      printf("[ERROR] SharedMemoryObject::closeNew (%s) close %s\n",
+      QUADRUPED_ERROR(_logger, "closeNew (%s) close %s",
              _name.c_str(), strerror(errno));
       throw std::runtime_error("Failed to create shared memory!");
       return;
@@ -285,7 +286,7 @@ class SharedMemoryObject {
     assert(_data);
     // first, unmap
     if (munmap((void*)_data, _size)) {
-      printf("[ERROR] SharedMemoryObject::detach (%s) munmap %s\n",
+      QUADRUPED_ERROR(_logger, "detach (%s) munmap %s",
              _name.c_str(), strerror(errno));
       throw std::runtime_error("Failed to create shared memory!");
       return;
@@ -295,7 +296,7 @@ class SharedMemoryObject {
 
     // close fd
     if (close(_fd)) {
-      printf("[ERROR] SharedMemoryObject::detach (%s) close %s\n",
+      QUADRUPED_ERROR(_logger, "detach (%s) close %s",
              _name.c_str(), strerror(errno));
       throw std::runtime_error("Failed to create shared memory!");
       return;
@@ -325,6 +326,7 @@ class SharedMemoryObject {
   std::string _name;
   size_t _size;
   int _fd;
+  BZL_QUADRUPED::Logger _logger = BZL_QUADRUPED::Logger("SharedMemoryObject");
 };
 
 #endif  // PROJECT_SHAREDMEMORY_H

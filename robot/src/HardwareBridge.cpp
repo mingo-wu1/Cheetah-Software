@@ -17,11 +17,17 @@
 //#include "rt/rt_rc_interface.h"
 #include "rt/rt_sbus.h"
 #include "rt/rt_spi.h"
+#if (USE_RS485_A1 == 1)
+#include "rt/rt_rs485_a1.h"
+#endif
 #include "rt/rt_vectornav.h"
 #include "rt/rt_ethercat.h"
 #include "Utilities/Utilities_print.h"
 
 #define USE_MICROSTRAIN
+/// Add Begin by peibo, 2021-06-22, add usbal2 imu sensor
+//#define USE_LPMSUABAL2
+/// Add End
 
 /*!
  * If an error occurs during initialization, before motors are enabled, print
@@ -30,12 +36,13 @@
  * @param printErrno If true, also print C errno
  */
 void HardwareBridge::initError(const char* reason, bool printErrno) {
-  printf("FAILED TO INITIALIZE HARDWARE: %s\n", reason);
+  QUADRUPED_ERROR(_logger, "FAILED TO INITIALIZE HARDWARE: %s", reason);
 
   if (printErrno) {
-    printf("Error: %s\n", strerror(errno));
+    QUADRUPED_ERROR(_logger, "Error: %s", strerror(errno));
   }
 
+  BZL_QUADRUPED::LoggerShutDown();
   exit(-1);
 }
 
@@ -43,20 +50,26 @@ void HardwareBridge::initError(const char* reason, bool printErrno) {
  * All hardware initialization steps that are common between Cheetah 3 and Mini Cheetah
  */
 void HardwareBridge::initCommon() {
-  printf("[HardwareBridge] Init stack\n");
+  QUADRUPED_INFO(_logger, "Init stack");
   prefaultStack();
-  printf("[HardwareBridge] Init scheduler\n");
+  QUADRUPED_INFO(_logger, "Init scheduler");
   setupScheduler();
   if (!_interfaceLCM.good()) {
     initError("_interfaceLCM failed to initialize\n", false);
   }
 
-  printf("[HardwareBridge] Subscribe LCM\n");
+  QUADRUPED_INFO(_logger, "Subscribe LCM");
   _interfaceLCM.subscribe("interface", &HardwareBridge::handleGamepadLCM, this);
   _interfaceLCM.subscribe("interface_request",
                           &HardwareBridge::handleControlParameter, this);
 
-  printf("[HardwareBridge] Start interface LCM handler\n");
+  /// Add Begin by wuchunming02@countrygarden.com.cn, 2021-01-30, add lcm for spi cmd test
+  _interfaceLCM.subscribe("testspicmd",
+                          &HardwareBridge::handleTestSpiCmdLCM, this);
+  QUADRUPED_INFO(_logger, "Start testspicmd LCM handler");
+  /// Add End
+
+  QUADRUPED_INFO(_logger, "Start interface LCM handler");
   _interfaceLcmThread = std::thread(&HardwareBridge::handleInterfaceLCM, this);
 }
 
@@ -76,7 +89,7 @@ void HardwareBridge::handleInterfaceLCM() {
  * leaves a log) instead of just becoming unresponsive.
  */
 void HardwareBridge::prefaultStack() {
-  printf("[Init] Prefault stack...\n");
+  QUADRUPED_INFO(_logger, "Prefault stack...");
   volatile char stack[MAX_STACK_SIZE];
   memset(const_cast<char*>(stack), 0, MAX_STACK_SIZE);
   if (mlockall(MCL_CURRENT | MCL_FUTURE) == -1) {
@@ -91,7 +104,7 @@ void HardwareBridge::prefaultStack() {
  * Configures the scheduler for real time priority
  */
 void HardwareBridge::setupScheduler() {
-  printf("[Init] Setup RT Scheduler...\n");
+  QUADRUPED_INFO(_logger, "Setup RT Scheduler...");
   struct sched_param params;
   params.sched_priority = TASK_PRIORITY;
   if (sched_setscheduler(0, SCHED_FIFO, &params) == -1) {
@@ -110,6 +123,34 @@ void HardwareBridge::handleGamepadLCM(const lcm::ReceiveBuffer* rbuf,
   _gamepadCommand.set(msg);
 }
 
+/// Add Begin by wuchunming02@countrygarden.com.cn, 2021-01-30, add lcm for spi cmd test
+void HardwareBridge::handleTestSpiCmdLCM(const lcm::ReceiveBuffer* rbuf,
+                                      const std::string& chan,
+                                      const test_spi_command_t* msg) {
+  (void)rbuf;
+  (void)chan;
+  _testSpiCmd.is_test = msg->is_test;
+  for (int i = 0; i < 4; ++i) {
+    _testSpiCmd.q_des_abad[i] = msg->q_des_abad[i];
+    _testSpiCmd.q_des_hip[i] = msg->q_des_hip[i];
+    _testSpiCmd.q_des_knee[i] = msg->q_des_knee[i];
+    _testSpiCmd.qd_des_abad[i] = msg->qd_des_abad[i];
+    _testSpiCmd.qd_des_hip[i] = msg->qd_des_hip[i];
+    _testSpiCmd.qd_des_knee[i] = msg->qd_des_knee[i];
+    _testSpiCmd.kp_abad[i] = msg->kp_abad[i];
+    _testSpiCmd.kp_hip[i] = msg->kp_hip[i];
+    _testSpiCmd.kp_knee[i] = msg->kp_knee[i];
+    _testSpiCmd.kd_abad[i] = msg->kd_abad[i];
+    _testSpiCmd.kd_hip[i] = msg->kd_hip[i];
+    _testSpiCmd.kd_knee[i] = msg->kd_knee[i];
+    _testSpiCmd.tau_abad_ff[i] = msg->tau_abad_ff[i];
+    _testSpiCmd.tau_hip_ff[i] = msg->tau_hip_ff[i];
+    _testSpiCmd.tau_knee_ff[i] = msg->tau_knee_ff[i];
+    _testSpiCmd.flags[i] = msg->flags[i];
+  }
+}
+/// Add End
+
 /*!
  * LCM Handler for control parameters
  */
@@ -120,23 +161,23 @@ void HardwareBridge::handleControlParameter(
   (void)chan;
   if (msg->requestNumber <= _parameter_response_lcmt.requestNumber) {
     // nothing to do!
-    printf(
+    QUADRUPED_WARN(_logger, 
         "[HardwareBridge] Warning: the interface has run a ControlParameter "
-        "iteration, but there is no new request!\n");
+        "iteration, but there is no new request!");
     // return;
   }
 
   // sanity check
   s64 nRequests = msg->requestNumber - _parameter_response_lcmt.requestNumber;
   if (nRequests != 1) {
-    printf("[ERROR] Hardware bridge: we've missed %ld requests\n",
+    QUADRUPED_ERROR(_logger, "Hardware bridge: we've missed %ld requests",
            nRequests - 1);
   }
 
   switch (msg->requestKind) {
     case (s8)ControlParameterRequestKind::SET_USER_PARAM_BY_NAME: {
       if(!_userControlParameters) {
-        printf("[Warning] Got user param %s, but not using user parameters!\n",
+        QUADRUPED_WARN(_logger, "Got user param %s, but not using user parameters!",
                (char*)msg->name);
       } else {
         std::string name((char*)msg->name);
@@ -169,7 +210,7 @@ void HardwareBridge::handleControlParameter(
                name.c_str());  // just for debugging print statements
         _parameter_response_lcmt.requestKind = msg->requestKind;
 
-        printf("[User Control Parameter] set %s to %s\n", name.c_str(),
+        QUADRUPED_DEBUG(_logger, "[User Control Parameter] set %s to %s", name.c_str(),
                controlParameterValueToString(
                    v, (ControlParameterValueKind)msg->parameterKind)
                    .c_str());
@@ -207,7 +248,7 @@ void HardwareBridge::handleControlParameter(
              name.c_str());  // just for debugging print statements
       _parameter_response_lcmt.requestKind = msg->requestKind;
 
-      printf("[Robot Control Parameter] set %s to %s\n", name.c_str(),
+      QUADRUPED_DEBUG(_logger, "[Robot Control Parameter] set %s to %s", name.c_str(),
              controlParameterValueToString(
                  v, (ControlParameterValueKind)msg->parameterKind)
                  .c_str());
@@ -224,8 +265,16 @@ void HardwareBridge::handleControlParameter(
 
 
 MiniCheetahHardwareBridge::MiniCheetahHardwareBridge(RobotController* robot_ctrl, bool load_parameters_from_file)
-    : HardwareBridge(robot_ctrl), _spiLcm(getLcmUrl(255)), _microstrainLcm(getLcmUrl(255)) {
+    : HardwareBridge(robot_ctrl), _spiLcm(getLcmUrl(0)), 
+#if (USE_RS485_A1 == 1)
+      _rs485A1Lcm(getLcmUrl(0)),
+#endif
+      _microstrainLcm(getLcmUrl(1)),
+      _rtVoice(&taskManager) {
   _load_parameters_from_file = load_parameters_from_file;
+}
+
+MiniCheetahHardwareBridge::~MiniCheetahHardwareBridge(){
 }
 
 /*!
@@ -236,69 +285,91 @@ void MiniCheetahHardwareBridge::run() {
   initHardware();
 
   if(_load_parameters_from_file) {
-    printf("[Hardware Bridge] Loading parameters from file...\n");
+    QUADRUPED_INFO(_logger, "Loading parameters from file...");
 
     try {
       _robotParams.initializeFromYamlFile(THIS_COM "config/mini-cheetah-defaults.yaml");
     } catch(std::exception& e) {
-      printf("Failed to initialize robot parameters from yaml file: %s\n", e.what());
+      QUADRUPED_ERROR(_logger, "Failed to initialize robot parameters from yaml file: %s", e.what());
+      BZL_QUADRUPED::LoggerShutDown();
       exit(1);
     }
 
     if(!_robotParams.isFullyInitialized()) {
-      printf("Failed to initialize all robot parameters\n");
+      QUADRUPED_ERROR(_logger, "Failed to initialize all robot parameters");
+      BZL_QUADRUPED::LoggerShutDown();
       exit(1);
     }
 
-    printf("Loaded robot parameters\n");
+    QUADRUPED_INFO(_logger, "Loaded robot parameters");
 
     if(_userControlParameters) {
       try {
+/// Change by hanyuanqiang, 2021-08-10, Add unitree RS485 A1 motor parameters
+#if (USE_RS485_A1 == 1)
+        _userControlParameters->initializeFromYamlFile(THIS_COM "config/mc-mit-ctrl-user-parameters-rs485-a1.yaml");
+#elif (USE_LINKAGE == 1)
+        _userControlParameters->initializeFromYamlFile(THIS_COM "config/mc-mit-ctrl-user-parameters-linkage.yaml");
+#elif (USE_LINKAGE_INDUSTRIAL == 1)
+        _userControlParameters->initializeFromYamlFile(THIS_COM "config/mc-mit-ctrl-user-parameters-linkage-industrial.yaml");
+#else
         _userControlParameters->initializeFromYamlFile(THIS_COM "config/mc-mit-ctrl-user-parameters.yaml");
+#endif
       } catch(std::exception& e) {
-        printf("Failed to initialize user parameters from yaml file: %s\n", e.what());
+        QUADRUPED_ERROR(_logger, "Failed to initialize user parameters from yaml file: %s", e.what());
+        BZL_QUADRUPED::LoggerShutDown();
         exit(1);
       }
 
       if(!_userControlParameters->isFullyInitialized()) {
-        printf("Failed to initialize all user parameters\n");
+        QUADRUPED_ERROR(_logger, "Failed to initialize all user parameters");
+        BZL_QUADRUPED::LoggerShutDown();
         exit(1);
       }
 
-      printf("Loaded user parameters\n");
+      QUADRUPED_INFO(_logger, "Loaded user parameters");
     } else {
-      printf("Did not load user parameters because there aren't any\n");
+      QUADRUPED_WARN(_logger, "Did not load user parameters because there aren't any");
     }
   } else {
-    printf("[Hardware Bridge] Loading parameters over LCM...\n");
+    QUADRUPED_INFO(_logger, "Loading parameters over LCM...");
     while (!_robotParams.isFullyInitialized()) {
-      printf("[Hardware Bridge] Waiting for robot parameters...\n");
+      QUADRUPED_INFO(_logger, "Waiting for robot parameters...");
       usleep(1000000);
     }
 
     if(_userControlParameters) {
       while (!_userControlParameters->isFullyInitialized()) {
-        printf("[Hardware Bridge] Waiting for user parameters...\n");
+        QUADRUPED_INFO(_logger, "Waiting for user parameters...");
         usleep(1000000);
       }
     }
   }
 
-
-
-  printf("[Hardware Bridge] Got all parameters, starting up!\n");
+  QUADRUPED_INFO(_logger, "Got all parameters, starting up!");
 
   _robotRunner =
       new RobotRunner(_controller, &taskManager, _robotParams.controller_dt, "robot-control");
 
   _robotRunner->driverCommand = &_gamepadCommand;
-  _robotRunner->spiData = &_spiData;
-  _robotRunner->spiCommand = &_spiCommand;
   _robotRunner->robotType = RobotType::MINI_CHEETAH;
   _robotRunner->vectorNavData = &_vectorNavData;
   _robotRunner->controlParameters = &_robotParams;
   _robotRunner->visualizationData = &_visualizationData;
   _robotRunner->cheetahMainVisualization = &_mainCheetahVisualization;
+  /// Add Begin by hanyuanqiang, 2021-03-24, Judge whether to configure A1 motor
+#if (USE_RS485_A1 == 1)
+  _robotRunner->rs485A1Data = &_rs485A1Data;
+  _robotRunner->rs485A1Command = &_rs485A1Command;
+#else
+  _robotRunner->spiData = &_spiData;
+  _robotRunner->spiCommand = &_spiCommand;
+#endif
+  /// Add End
+
+  /// Add Begin by wuchunming, 20210716, add serialport pressure sensor
+  _robotRunner->sensorData_ = &pressureData_;
+  /// Add End
 
   _firstRun = false;
 
@@ -306,14 +377,35 @@ void MiniCheetahHardwareBridge::run() {
 
   statusTask.start();
 
-  // spi Task start
+  /// Add Begin by hanyuanqiang, 2021-03-24, Judge whether to configure A1 motor
+#if (USE_RS485_A1 == 1)
+  PeriodicMemberFunction<MiniCheetahHardwareBridge> rs485A1Task(
+      &taskManager, .008, "rs485_a1", &MiniCheetahHardwareBridge::runRs485A1, this);
+  rs485A1Task.start();
+#else
   PeriodicMemberFunction<MiniCheetahHardwareBridge> spiTask(
       &taskManager, .002, "spi", &MiniCheetahHardwareBridge::runSpi, this);
   spiTask.start();
+#endif
+  /// Add End
 
   // microstrain
   if(_microstrainInit)
     _microstrainThread = std::thread(&MiniCheetahHardwareBridge::runMicrostrain, this);
+
+  /// Add Begin by victor, 2021-01-21, add ig1 imu sensor implementation code
+  if(_lpIG1ImuIsInit)
+	_lpIG1ImuThread = std::thread(&MiniCheetahHardwareBridge::runLpIG1Imu,this);
+  /// Add End
+
+  /// Add Begin by peibo, 2021-06-22, add usbal2 imu sensor implementation code
+#if (USE_LPMSUSBAL2 == 1)
+  if(_lpUSBAL2ImuInit)
+  {
+    _lpUSBAL2ImuThread = std::thread(&MiniCheetahHardwareBridge::runLpUSBAL2Imu,this);
+  }
+#endif
+  /// Add End
 
   // robot controller start
   _robotRunner->start();
@@ -323,18 +415,32 @@ void MiniCheetahHardwareBridge::run() {
       &taskManager, .0167, "lcm-vis",
       &MiniCheetahHardwareBridge::publishVisualizationLCM, this);
   visualizationLCMTask.start();
+  
+  if(_rtI2C.IsOk()){
+    PeriodicMemberFunction<MiniCheetahHardwareBridge> i2cTask(
+        &taskManager, .002, "i2c", &MiniCheetahHardwareBridge::runI2C, this);
+    i2cTask.start();
+  }
 
   // rc controller
-  _port = init_sbus(false);  // Not Simulation
-  PeriodicMemberFunction<HardwareBridge> sbusTask(
-      &taskManager, .005, "rc_controller", &HardwareBridge::run_sbus, this);
-  sbusTask.start();
+  // Change by hanyuanqinag, 2021-09-18, Comment redundant threads
+  // _port = init_sbus(false);  // Not Simulation
+  // PeriodicMemberFunction<HardwareBridge> sbusTask(
+  //     &taskManager, .005, "rc_controller", &HardwareBridge::run_sbus, this);
+  // sbusTask.start();
 
   // temporary hack: microstrain logger
   PeriodicMemberFunction<MiniCheetahHardwareBridge> microstrainLogger(
       &taskManager, .001, "microstrain-logger", &MiniCheetahHardwareBridge::logMicrostrain, this);
   microstrainLogger.start();
 
+  /// Add Begin by peibo, 2021-06-22, add usbal2 imu sensor implementation code
+#if (USE_LPMSUSBAL2 == 1)
+  PeriodicMemberFunction<MiniCheetahHardwareBridge> lpUSBAL2ImuLogger(
+      &taskManager, .001, "LpUSBAL2Imu-logger", &MiniCheetahHardwareBridge::logLpUSBAL2Imu, this);
+  lpUSBAL2ImuLogger.start();
+#endif
+  /// Add End
   for (;;) {
     usleep(1000000);
     // printf("joy %f\n", _robotRunner->driverCommand->leftStickAnalog[0]);
@@ -354,26 +460,108 @@ void HardwareBridge::run_sbus() {
 }
 
 void MiniCheetahHardwareBridge::runMicrostrain() {
+
+  /// Add Begin by victor, 2021-01-21, add microstrain imu sensor implementation code
+  /// ofile_mic.open("/home/user/workspace/temp/log/mic.txt");
+  /// Add End
+
   while(true) {
     _microstrainImu.run();
 
 #ifdef USE_MICROSTRAIN
-    _vectorNavData.accelerometer = _microstrainImu.acc;
-    _vectorNavData.quat[0] = _microstrainImu.quat[1];
-    _vectorNavData.quat[1] = _microstrainImu.quat[2];
-    _vectorNavData.quat[2] = _microstrainImu.quat[3];
-    _vectorNavData.quat[3] = _microstrainImu.quat[0];
-    _vectorNavData.gyro = _microstrainImu.gyro;
+_vectorNavData.accelerometer = _microstrainImu.acc;
+_vectorNavData.quat[0] = _microstrainImu.quat[1];
+_vectorNavData.quat[1] = _microstrainImu.quat[2];
+_vectorNavData.quat[2] = _microstrainImu.quat[3];
+_vectorNavData.quat[3] = _microstrainImu.quat[0];
+_vectorNavData.gyro = _microstrainImu.gyro;
 #endif
+
+  /// Add Begin by victor, 2021-01-21, add microstrain imu sensor implementation code
+  /*
+  ofile<<_microstrainImu.acc[0]<<"	"<<_microstrainImu.acc[1]<<"	"<<_microstrainImu.acc[2]<<"	"<<_microstrainImu.quat[1]<<"	"<<_microstrainImu.quat[2]<<"	"<<_microstrainImu.quat[3]<<"	"<<_microstrainImu.quat[0]<<"	"<<_microstrainImu.gyro[0]<<"	"<<_microstrainImu.gyro[1]<<"	"<<_microstrainImu.gyro[2]<<"	"<<std::endl;
+  */
+  /// Add End
+ 
   }
 
+  /// Add Begin by victor, 2021-01-21, add microstrain imu sensor implementation code
+  /// ofile_mic.close();
+  /// Add End
 
 }
+
+/// Add Begin by victor, 2021-01-21, add ig1 imu sensor implementation code
+void MiniCheetahHardwareBridge::runLpIG1Imu(){
+
+  /// ofile_ig1.open("/home/user/workspace/temp/log/ig.txt");
+
+  while(true){
+	_lpIG1Imu.run();
+        /*
+	_vectorNavData.accelerometer  = _lpIG1Imu.acc;
+	_vectorNavData.quat[0]        = _lpIG1Imu.quat[1];
+	_vectorNavData.quat[1]        = _lpIG1Imu.quat[2];
+	_vectorNavData.quat[2]        = _lpIG1Imu.quat[3];
+	_vectorNavData.quat[3]        = _lpIG1Imu.quat[0];
+	_vectorNavData.gyro           = _lpIG1Imu.gyro;
+        */
+  /*
+  ofile_ig1<<_lpIG1Imu.acc[0]<<"	"<<_lpIG1Imu.acc[1]<<"	"<<_lpIG1Imu.acc[2]<<"	"<<_lpIG1Imu.quat[1]<<"	"<<_lpIG1Imu.quat[2]<<"	"<<_lpIG1Imu.quat[3]<<"	"<<_lpIG1Imu.quat[0]<<"	"<<_lpIG1Imu.gyro[0]<<"	"<<_lpIG1Imu.gyro[1]<<"	"<<_lpIG1Imu.gyro[2]<<"	"<<std::endl;
+  */
+  }
+  /// ofile_ig1.close();
+}
+/// Add End
+
+/// Add Begin by peibo, 2021-06-22, add usbal2 imu sensor definition code
+void MiniCheetahHardwareBridge::runLpUSBAL2Imu()
+{
+#if (USE_LPMSUSBAL2 == 1)
+  while(true)
+  {
+	  _lpUSBAL2Imu.update();
+    _lpUSBAL2ImuMutex.lock();
+      for(u32 i = 0; i < 4; i++) {
+    _lpUSBAL2ImuData.quat[i] = _lpUSBAL2Imu.quat[i];
+    }
+
+    //Vec3<float> rpy = ori::quatToRPY(_lpUSBAL2Imu.quat);
+    for(u32 i = 0; i < 3; i++) {
+      _lpUSBAL2ImuData.rpy[i] = _lpUSBAL2Imu.rpy[i];
+      _lpUSBAL2ImuData.acc[i] = _lpUSBAL2Imu.acc[i];
+      _lpUSBAL2ImuData.omega[i] = _lpUSBAL2Imu.gyro[i];
+    }
+    _lpUSBAL2ImuMutex.unlock();
+
+    _vectorNavData.accelerometer  = _lpUSBAL2Imu.acc;
+    _vectorNavData.quat[0]        = _lpUSBAL2Imu.quat[1];
+    _vectorNavData.quat[1]        = _lpUSBAL2Imu.quat[2];
+    _vectorNavData.quat[2]        = _lpUSBAL2Imu.quat[3];
+    _vectorNavData.quat[3]        = _lpUSBAL2Imu.quat[0];
+    _vectorNavData.gyro           = _lpUSBAL2Imu.gyro;
+
+    usleep(2000);
+  }
+#endif
+}
+/// Add End
 
 void MiniCheetahHardwareBridge::logMicrostrain() {
   _microstrainImu.updateLCM(&_microstrainData);
   _microstrainLcm.publish("microstrain", &_microstrainData);
 }
+
+/// Add Begin by peibo, 2021-06-22, add usbal2 imu sensor definition code
+void MiniCheetahHardwareBridge::logLpUSBAL2Imu() {
+#if (USE_LPMSUSBAL2 == 1)
+  _lpUSBAL2ImuMutex.lock();
+  _lpUSBAL2ImuLcm.publish("lpUSBAL2Imu", &_lpUSBAL2ImuData);
+  _lpUSBAL2ImuMutex.unlock();
+#endif
+}
+/// Add End
+
 
 /*!
  * Initialize Mini Cheetah specific hardware
@@ -381,27 +569,54 @@ void MiniCheetahHardwareBridge::logMicrostrain() {
 void MiniCheetahHardwareBridge::initHardware() {
   _vectorNavData.quat << 1, 0, 0, 0;
 #ifndef USE_MICROSTRAIN
-  printf("[MiniCheetahHardware] Init vectornav\n");
+  QUADRUPED_INFO(_logger, "Init vectornav");
   if (!init_vectornav(&_vectorNavData)) {
-    printf("Vectornav failed to initialize\n");
+    QUADRUPED_ERROR(_logger, "Vectornav failed to initialize");
     //initError("failed to initialize vectornav!\n", false);
   }
 #endif
+/// Add Begin by peibo, 2021-06-22, add usbal2 imu 
+#if (USE_LPMSUSBAL2 == 1)
+  QUADRUPED_INFO(_logger, "Init LPMSUSBAL2");
+  _lpUSBAL2ImuInit = _lpUSBAL2Imu.initImu();
+#endif
+/// Add End
 
+#if (USE_RS485_A1 == 1)
+  init_rs485_a1();
+#else
   init_spi();
+#endif
+
   _microstrainInit = _microstrainImu.tryInit(0, 921600);
+
+  /// Add Begin by victor, 2021-01-21, add ig1 imu sensor implementation code
+  bool has_IG1 = false;
+  if(has_IG1){
+    _lpIG1ImuIsInit = _lpIG1Imu.tryInit(0,115200);
+  }
+  /// Add End
+
+  /// Add Begin by wuchunming, 20210716, add serialport pressure sensor
+  _rtI2C.Init(5, 0x11);
+  /// Add End
+
+  /// Add Begin by hanyuanqiang, 2021-04-29, add exception detection
+  _checkError();
+  /// Add End
+
 }
 
 void Cheetah3HardwareBridge::initHardware() {
   _vectorNavData.quat << 1, 0, 0, 0;
-  printf("[Cheetah 3 Hardware] Init vectornav\n");
+  QUADRUPED_INFO(_logger, "Init vectornav");
   if (!init_vectornav(&_vectorNavData)) {
-    printf("Vectornav failed to initialize\n");
-    printf_color(PrintColor::Red, "****************\n"
+    QUADRUPED_ERROR(_logger, "Vectornav failed to initialize\n");
+    QUADRUPED_ERROR(_logger,      "\n****************\n"
                                   "**  WARNING!  **\n"
                                   "****************\n"
                                   "  IMU DISABLED  \n"
-                                  "****************\n\n");
+                                  "****************\n");
     //initError("failed to initialize vectornav!\n", false);
   }
 }
@@ -414,11 +629,147 @@ void MiniCheetahHardwareBridge::runSpi() {
   spi_data_t* data = get_spi_data();
 
   memcpy(cmd, &_spiCommand, sizeof(spi_command_t));
+
+  /// Add Begin by lihao and peibo, 2021-09-15, add the function that enable the motors again
+  static int _cur_iter = 0, _start_iter = 2000;
+  if (_robotRunner->driverCommand->rightBumper)
+  {
+    if (_isStop == false && _cur_iter == 0)
+    {
+      _isStop = true;
+    }
+    else if (_isStop == true && _cur_iter > _start_iter)
+    {
+      _checkError();
+      if (false == _isStop)
+      {
+        QUADRUPED_INFO(_logger, "now enable");
+        for (int i = 0; i < 4; ++i)
+        {
+          cmd->flags[i] = 1;
+        }
+      }
+    }
+    else
+    {
+      _cur_iter ++;
+    }
+  }
+  else
+  {
+    _cur_iter = 0;
+  }
+
+  if(_isStop == true)
+  {
+    for(int i = 0; i < 4; ++i){
+      cmd->kp_abad[i]     = 0;
+      cmd->kp_hip[i]      = 0;
+      cmd->kp_knee[i]     = 0;
+      cmd->kd_abad[i]     = 0;
+      cmd->kd_hip[i]      = 0;
+      cmd->kd_knee[i]     = 0;
+      cmd->tau_abad_ff[i] = 0;
+      cmd->tau_hip_ff[i]  = 0;
+      cmd->tau_knee_ff[i] = 0;
+      cmd->flags[i]       = 0;
+    }
+  }else{}
+  /// Add End
+
   spi_driver_run();
   memcpy(&_spiData, data, sizeof(spi_data_t));
 
   _spiLcm.publish("spi_data", data);
   _spiLcm.publish("spi_command", cmd);
+}
+
+#if (USE_RS485_A1 == 1)
+void MiniCheetahHardwareBridge::runRs485A1() {
+  rs485_a1_command_t* cmd = get_rs485_a1_command();
+  rs485_a1_data_t* data = get_rs485_a1_data();
+
+  memcpy(cmd, &_rs485A1Command, sizeof(rs485_a1_command_t));
+
+  if(_robotRunner->driverCommand->rightBumper || _isStop ){
+    _isStop = true;
+    for (int i = 0; i < 4; ++i) {
+      cmd->kp_abad[i]     = 0;
+      cmd->kp_hip[i]      = 0;
+      cmd->kp_knee[i]     = 0;
+      cmd->kd_abad[i]     = 0;
+      cmd->kd_hip[i]      = 0;
+      cmd->kd_knee[i]     = 0;
+      cmd->tau_abad_ff[i] = 0;
+      cmd->tau_hip_ff[i]  = 0;
+      cmd->tau_knee_ff[i] = 0;
+      cmd->flags[i]       = 0;
+    } 
+  }
+
+  rs485_a1_driver_run();
+  memcpy(&_rs485A1Data, data, sizeof(rs485_a1_data_t));
+
+  _rs485A1Lcm.publish("rs485_a1_data", data);
+  _rs485A1Lcm.publish("rs485_a1_command", cmd);
+}
+#endif
+
+/*!
+ * Mini Cheetah exception detection
+ */
+void MiniCheetahHardwareBridge::_checkError() {
+
+  _isStop = false;
+  _rtLed.RtLedDisplay(COLOUR_PURPLE);
+  
+  /// Mod Begin by peibo, 2021-06-22, add usbal2 imu sensor header
+  if (false == _microstrainInit && false == _lpUSBAL2ImuInit)
+  /// Ori Code:
+  //if (false == _microstrainInit)
+  /// Mod End
+  {
+    _isStop = true;
+    QUADRUPED_ERROR(_logger, "IMU init failed");
+    _rtVoice.RtVoicePlay("error_imu_init.wav", 10.0);
+    return;
+  }
+
+#if (USE_RS485_A1 == 1)
+  // TODO(hanyuanqiang): reserve
+#else
+  const float q_adad_des[4] = {-0.6f, 0.6f, -0.6f, 0.6f};
+  const float q_hip_des[4] = {-1.0f, -1.0f, -1.0f, -1.0f};
+  const float q_knee_des[4] = {2.7f, 2.7f, 2.7f, 2.7f};
+  const float offset_error_abad = 0.15f;
+  const float offset_error_hip = 0.20f;
+  const float offset_error_knee = 0.15f;
+
+  spi_data_t* data = get_spi_data();
+
+  for (int i = 0; i < 10; i++)
+  {
+    usleep(50000);
+    spi_driver_run();
+  }
+
+  for (int i = 0; i < 4; i++)
+  {
+    if ((fabsf(data->q_abad[i] - q_adad_des[i]) >= offset_error_abad) ||
+        (fabsf(data->q_hip[i] - q_hip_des[i]) >= offset_error_hip) ||
+        (fabsf(data->q_knee[i] - q_knee_des[i]) >= offset_error_knee))
+    {
+      _isStop = true;
+      QUADRUPED_ERROR(_logger, "Leg init failed, \
+        num = %d, abad = %f, hip = %f, knee = %f\n", 
+        i, data->q_abad[i], data->q_hip[i], data->q_knee[i]);
+      _rtVoice.RtVoicePlay("error_motor_position.wav", 10.0);
+      return;
+    }
+  }
+#endif
+  _rtLed.RtLedDisplay(COLOUR_GREEN);
+  _rtVoice.RtVoicePlay("dog.wav", 0.0);
 }
 
 void Cheetah3HardwareBridge::runEcat() {
@@ -518,7 +869,7 @@ void HardwareBridge::publishVisualizationLCM() {
   _visualizationLCM.publish("main_cheetah_visualization", &visualization_data);
 }
 
-Cheetah3HardwareBridge::Cheetah3HardwareBridge(RobotController *rc) : HardwareBridge(rc),  _ecatLCM(getLcmUrl(255)) {
+Cheetah3HardwareBridge::Cheetah3HardwareBridge(RobotController *rc) : HardwareBridge(rc),  _ecatLCM(getLcmUrl(0)) {
 
 }
 
@@ -588,5 +939,15 @@ void Cheetah3HardwareBridge::run() {
     // printf("joy %f\n", _robotRunner->driverCommand->leftStickAnalog[0]);
   }
 }
+
+/// Add Begin by wuchunming, 20210716, add serialport pressure sensor
+void MiniCheetahHardwareBridge::runI2C(){
+    _rtI2C.Read(&data, 8);
+    _rtI2C.ConvertAd5593R(data, regVal, 4);
+
+    memcpy(&i2c_data_, regVal, sizeof(regVal));
+    i2cLcm_.publish("i2c_data", &i2c_data_);
+}
+/// Add End
 
 #endif

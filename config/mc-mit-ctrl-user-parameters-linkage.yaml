@@ -1,0 +1,184 @@
+# Generated on Mon Aug  5 18:20:08 2019
+__collection-name__: user-parameters
+
+Kd_backfilp_step1               : [1, 1, 1]
+Kd_backfilp_step2_b             : [0.9, 0.9, 0.9]
+Kd_backfilp_step2_f             : [0.9, 0.9, 0.9]
+Kd_body                         : [10, 10, 10]
+Kd_foot                         : [10, 10, 10]
+Kd_joint                        : [1, 0.2, 0.2]
+Kd_joint_bl_balanceStand        : [1, 0.2, 0.2]
+Kd_joint_bl_bounding_gait       : [1, 0.4, 0.4]
+Kd_joint_bl_heighSpeed_1        : [1, 0.2, 0.2]
+Kd_joint_bl_heighSpeed_2        : [1, 0.2, 0.2]
+Kd_joint_bl_stair               : [5, 0.8, 0.8]
+Kd_joint_bl_wbc                 : [1, 0.2, 0.2]
+Kd_joint_br_balanceStand        : [1, 0.2, 0.2]
+Kd_joint_br_bounding_gait       : [1, 0.4, 0.4]
+Kd_joint_br_heighSpeed_1        : [1, 0.2, 0.2]
+Kd_joint_br_heighSpeed_2        : [1, 0.2, 0.2]
+Kd_joint_br_stair               : [5, 0.8, 0.8]
+Kd_joint_br_wbc                 : [1, 0.2, 0.2]
+Kd_joint_ex1                    : [20, 4, 4] # ori 2 4 4
+Kd_joint_ex2                    : [15, 4, 4] # ori 2 4 4
+Kd_joint_ex3                    : [20, 4, 4] # ori 2 4 4 
+Kd_joint_ex4                    : [15, 4, 4] # ori 2 4 4
+Kd_joint_fl_balanceStand        : [1, 0.2, 0.2]
+Kd_joint_fl_bounding_gait       : [1, 0.4, 0.4]
+Kd_joint_fl_heighSpeed_1        : [1, 0.2, 0.2]
+Kd_joint_fl_heighSpeed_2        : [1, 0.2, 0.2]
+Kd_joint_fl_stair               : [5, 0.8, 0.8]
+Kd_joint_fl_wbc                 : [1, 0.2, 0.2]
+Kd_joint_fr_balanceStand        : [1, 0.2, 0.2]
+Kd_joint_fr_bounding_gait       : [1, 0.4, 0.4]
+Kd_joint_fr_heighSpeed_1        : [1, 0.2, 0.2]
+Kd_joint_fr_heighSpeed_2        : [1, 0.2, 0.2]
+Kd_joint_fr_stair               : [5, 0.8, 0.8]
+Kd_joint_fr_wbc                 : [1, 0.2, 0.2]
+Kd_ori                          : [10, 10, 10]
+Kp_backfilp_step1               : [10, 10, 10]
+Kp_backfilp_step2_b             : [25, 25, 25] # 20,20,15
+Kp_backfilp_step2_f             : [25, 25, 25]
+Kp_body                         : [100, 20, 100] # ori 100 100 100
+Kp_foot                         : [500, 100, 500] # ori 500 500 500
+Kp_joint                        : [3, 3, 3] # 3 3 3
+Kp_joint_bl_balanceStand        : [3, 3, 3]
+Kp_joint_bl_bounding_gait       : [3, 3, 5]
+Kp_joint_bl_heighSpeed_1        : [5, 5, 5] # ori 10 3 7
+Kp_joint_bl_heighSpeed_2        : [5, 5, 5] # ori 10 3 5
+Kp_joint_bl_stair               : [5, 5, 5]
+Kp_joint_bl_wbc                 : [3, 3, 3]
+Kp_joint_br_balanceStand        : [3, 3, 3]
+Kp_joint_br_bounding_gait       : [3, 3, 5]
+Kp_joint_br_heighSpeed_1        : [5, 5, 5] # ori 10 3 7
+Kp_joint_br_heighSpeed_2        : [5, 5, 5] # ori 10 3 7
+Kp_joint_br_stair               : [5, 5, 5]
+Kp_joint_br_wbc                 : [3, 3, 3]
+Kp_joint_ex1                    : [40, 10, 10] # old 5 5 5 ori 10 15 15
+Kp_joint_ex2                    : [55, 10, 10]
+Kp_joint_ex3                    : [30, 10, 20]
+Kp_joint_ex4                    : [50, 10, 20]
+Kp_joint_fl_balanceStand        : [3, 3, 3]
+Kp_joint_fl_bounding_gait       : [3, 5, 5]
+Kp_joint_fl_heighSpeed_1        : [5, 5, 5] # ori 10 3 7
+Kp_joint_fl_heighSpeed_2        : [5, 5, 5] # ori 10 3 5
+Kp_joint_fl_stair               : [5, 5, 5]
+Kp_joint_fl_wbc                 : [3, 3, 3]
+Kp_joint_fr_balanceStand        : [3, 3, 3]
+Kp_joint_fr_bounding_gait       : [3, 5, 5]
+Kp_joint_fr_heighSpeed_1        : [5, 5, 5] # ori 10 3 7
+Kp_joint_fr_heighSpeed_2        : [5, 5, 5] # ori 10 3 5
+Kp_joint_fr_stair               : [5, 5, 5]
+Kp_joint_fr_wbc                 : [3, 3, 3]
+Kp_ori                          : [100, 100, 100]
+Q1                              : [0.25, 3, 10] # ori 0.25 3 5 old 0.25 3 5  RPY
+Q2                              : [1.5, 1.5, 5] # ori 2 2 5 old 1.5 1.5 5  XYZ POS
+Q3                              : [0, 0, 0.7] # RPY RATE 0 0 0.3
+Q4                              : [0.8, 0.2, 0.3] # ori 0.5 0.2 0.1 old 0.8 0.5 0.3 BODY V
+Q_ang                           : [30, 40, 10]
+Q_ori                           : [1500, 1900, 900]
+Q_pos                           : [20, 20, 20000]
+Q_vel                           : [0, 0, 0]
+RPC_H_phi0                      : [-0.3, 0.02, 0]
+RPC_H_r_rot                     : [1, 1, 0]
+RPC_H_r_trans                   : [1, 2, 1]
+RPC_H_theta0                    : [1.25, 0, 0]
+RPC_Q_dp                        : [2500, 2500, 500]
+RPC_Q_dtheta                    : [2.5, 2.5, 50]
+RPC_Q_p                         : [10000, 10000, 100000]
+RPC_Q_theta                     : [5000, 10000, 2500]
+RPC_R_f                         : [0.001, 0.001, 0.001]
+RPC_R_r                         : [350000, 350000, 350000]
+RPC_filter                      : [0.5, 0.1, 0]
+RPC_gravity                     : [0, 0, -9.81]
+RPC_inertia                     : [0.07, 0.26, 0.242]
+RPC_mass                        : 9
+RPC_mu                          : 0.5
+RPC_use_async_filt              : 1
+RPC_use_pred_comp               : 1
+RPC_use_separate                : 1
+RPC_visualize_pred              : 1
+R_control                       : 1.1
+R_prev                          : 2
+Swing_Kd_cartesian              : [5.5, 5.5, 5.5]
+Swing_Kd_joint                  : [0.2, 0.2, 0.2]
+Swing_Kp_cartesian              : [350, 350, 75]
+Swing_Kp_joint                  : [0, 0, 0]
+Swing_step_offset               : [0, 0.05, -0.003]
+Swing_traj_height               : 0.07
+Swing_use_tau_ff                : 0
+alpha                           : 4e-05
+backfilp_ramp_end_iteration     : 650
+backfilp_tau_mult               : 2.2
+backfilp_tau_mult_bl            : 2.4
+backfilp_tau_mult_br            : 2.4
+backfilp_tau_mult_fl            : 2.4
+backfilp_tau_mult_fr            : 2.4
+backfilp_tuck_iteration         : 600
+cmpc_bonus_swing                : 0
+cmpc_gait                       : 9
+cmpc_gait_stair                 : 14
+cmpc_use_sparse                 : 0
+cmpc_x_drag                     : 3
+cur_speed_level                 : 0
+des_dp                          : [0, 0, 0]
+des_dp_max                      : [1, 0.5, 0]
+des_dtheta                      : [0, 0, 0]
+des_dtheta_max                  : [0, 0, 3]
+des_p                           : [0, 0, 0.26]
+des_theta                       : [0, 0, 0]
+des_theta_max                   : [0, 0.4, 0]
+factor_of_iterations_between_mpc: 1
+fmax                            : 120
+foot_height                     : 0.06 # ori 0.06
+foot_height_stair               : 0.18 # ori 0.13
+gait_max_leg_angle              : 15
+gait_max_stance_time            : 0.25
+gait_min_stance_time            : 0.1
+gait_override                   : 4
+gait_period_time                : 0.5
+gait_seg                        : 10
+gait_switching_phase            : 0.5
+gait_type                       : 4
+horizon_length                  : 10
+iterationsBetweenGaitSeg_stair  : 30 # ori 13
+iterations_between_gait_seg     : 20 # ori 13, old 20
+jcqp_alpha                      : 1.5
+jcqp_max_iter                   : 10000
+jcqp_rho                        : 1e-07
+jcqp_sigma                      : 1e-08
+jcqp_terminate                  : 0.1
+liner_a_limit_enable            : 0
+liner_a_max                     : 0.5
+mu                              : 0.4
+raibert_coeff                   : 0.03
+speed_threshold_value_1         : 10 # ori 1.6
+speed_threshold_value_2         : 20 # ori 3.5
+stance_legs                     : 4
+two_leg_orient                  : [0.225, 9.1, 0]
+use_body_pitch_compute          : 0
+use_jcqp                        : 0
+use_wbc                         : 1
+w_floating1                     : 0.1
+w_floating2                     : 0.1
+w_floating3                     : 0.1
+w_floating4                     : 0.1
+w_floating5                     : 0.1
+w_floating6                     : 0.1
+w_rf1                           : 1
+w_rf10                          : 1
+w_rf11                          : 1
+w_rf12                          : 1
+w_rf2                           : 1
+w_rf3                           : 1
+w_rf4                           : 1
+w_rf5                           : 1
+w_rf6                           : 1
+w_rf7                           : 1
+w_rf8                           : 1
+w_rf9                           : 1
+wbc_param_mode                  : 0
+weights1                        : [0.25, 0.25, 10]
+weights2                        : [2, 2, 20]
+weights3                        : [0, 0, 0.3]
+weights4                        : [0.2, 0.2, 0.2]

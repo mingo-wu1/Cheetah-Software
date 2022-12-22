@@ -59,7 +59,9 @@ template struct GaitData<float>;
  * Constructor to automatically setup a basic gait
  */
 template <typename T>
-GaitScheduler<T>::GaitScheduler(MIT_UserParameters* _userParameters, float _dt) {
+GaitScheduler<T>::GaitScheduler(BZL_UserParameters* _userParameters, float _dt)
+  : _logger("GaitScheduler")
+{
   initialize();
   userParameters = _userParameters;
   dt = _dt;
@@ -70,7 +72,7 @@ GaitScheduler<T>::GaitScheduler(MIT_UserParameters* _userParameters, float _dt) 
  */
 template <typename T>
 void GaitScheduler<T>::initialize() {
-  std::cout << "[GAIT] Initialize Gait Scheduler" << std::endl;
+  QUADRUPED_INFO(_logger, "Initialize Gait Scheduler");
 
   // Start the gait in a trot since we use this the most
   gaitData._currentGait = GaitType::STAND;
@@ -274,8 +276,7 @@ void GaitScheduler<T>::modifyGait() {
 template <typename T>
 void GaitScheduler<T>::createGait() {
 
-  std::cout << "[GAIT] Transitioning gait from " << gaitData.gaitName
-            << " to ";
+  QUADRUPED_INFO(_logger, "Transitioning gait from %s", gaitData.gaitName.c_str());
 
   // Case structure gets the appropriate parameters
   switch (gaitData._nextGait) {
@@ -463,7 +464,7 @@ void GaitScheduler<T>::createGait() {
   // Gait has switched
   gaitData._currentGait = gaitData._nextGait;
 
-  std::cout << gaitData.gaitName << "\n" << std::endl;
+  QUADRUPED_INFO(_logger, "Transitioning gait to   %s", gaitData.gaitName.c_str());
 
   // Calculate the auxilliary gait information
   calcAuxiliaryGaitData();

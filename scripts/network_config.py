@@ -10,7 +10,7 @@ def get_saved_interface_name():
     home = expanduser("~")
     name = ""
     try:
-        with open(home + "/.cheetah_network.txt"):
+        with open(home + "/.cheetah_network.txt") as f:
             name = f.read().split()[0]
     except:
         name = ""

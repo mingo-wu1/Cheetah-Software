@@ -253,7 +253,7 @@ void ControlParameters::initializeFromIniFile(const std::string& path) {
 
   if (sections.size() != 1) {
     printf(
-        "[ERROR] INI file %s had %ld sections (expected 1) : not initializing "
+        "[ERROR] INI file %s had %zu sections (expected 1) : not initializing "
         "control parameters\n",
         path.c_str(), sections.size());
     throw std::runtime_error("ini file bad");
@@ -366,26 +366,34 @@ void ControlParameters::defineAndInitializeFromYamlFile(const std::string &path)
     collection.addParameter(cp, key);
     switch (cp->_kind) {
       case ControlParameterValueKind::DOUBLE: {
-        double d;
-        assert(paramHandler.getValue(key, d));
+        double d(0);
+        bool result = paramHandler.getValue(key, d);
+        (void)result;
+        assert(result);
         cp->initializeDouble(d);
       } break;
 
       case ControlParameterValueKind::FLOAT: {
-        float f;
-        assert(paramHandler.getValue(key, f));
+        float f(0);
+        bool result = paramHandler.getValue(key, f);
+        (void)result;
+        assert(result);
         cp->initializeFloat(f);
       } break;
 
       case ControlParameterValueKind::S64: {
-        s64 f;
-        assert(paramHandler.getValue(key, f));
+        s64 f(0);
+        bool result = paramHandler.getValue(key, f);
+        (void)result;
+        assert(result);
         cp->initializeInteger(f);
       } break;
 
       case ControlParameterValueKind::VEC3_DOUBLE: {
         std::vector<double> vv;
-        assert(paramHandler.getVector(key, vv));
+        bool result = paramHandler.getVector(key, vv);
+        (void)result;
+        assert(result);
         assert(vv.size() == 3);
         Vec3<double> v(vv[0], vv[1], vv[2]);
         cp->initializeVec3d(v);
@@ -393,7 +401,9 @@ void ControlParameters::defineAndInitializeFromYamlFile(const std::string &path)
 
       case ControlParameterValueKind::VEC3_FLOAT: {
         std::vector<float> vv;
-        assert(paramHandler.getVector(key, vv));
+        bool result = paramHandler.getVector(key, vv);
+        (void)result;
+        assert(result);
         assert(vv.size() == 3);
         Vec3<float> v(vv[0], vv[1], vv[2]);
         cp->initializeVec3f(v);
@@ -445,26 +455,34 @@ void ControlParameters::initializeFromYamlFile(const std::string& path) {
     ControlParameter& cp = collection.lookup(key);
     switch (cp._kind) {
       case ControlParameterValueKind::DOUBLE: {
-        double d;
-        assert(paramHandler.getValue(key, d));
+        double d(0);
+        bool result = paramHandler.getValue(key, d);
+        (void)result;
+        assert(result);
         cp.initializeDouble(d);
       } break;
 
       case ControlParameterValueKind::FLOAT: {
-        float f;
-        assert(paramHandler.getValue(key, f));
+        float f(0);
+        bool result = paramHandler.getValue(key, f);
+        (void)result;
+        assert(result);
         cp.initializeFloat(f);
       } break;
 
       case ControlParameterValueKind::S64: {
-        s64 f;
-        assert(paramHandler.getValue(key, f));
+        s64 f(0);
+        bool result = paramHandler.getValue(key, f);
+        (void)result;
+        assert(result);
         cp.initializeInteger(f);
       } break;
 
       case ControlParameterValueKind::VEC3_DOUBLE: {
         std::vector<double> vv;
-        assert(paramHandler.getVector(key, vv));
+        bool result = paramHandler.getVector(key, vv);
+        (void)result;
+        assert(result);
         assert(vv.size() == 3);
         Vec3<double> v(vv[0], vv[1], vv[2]);
         cp.initializeVec3d(v);
@@ -472,7 +490,9 @@ void ControlParameters::initializeFromYamlFile(const std::string& path) {
 
       case ControlParameterValueKind::VEC3_FLOAT: {
         std::vector<float> vv;
-        assert(paramHandler.getVector(key, vv));
+        bool result = paramHandler.getVector(key, vv);
+        (void)result;
+        assert(result);
         assert(vv.size() == 3);
         Vec3<float> v(vv[0], vv[1], vv[2]);
         cp.initializeVec3f(v);

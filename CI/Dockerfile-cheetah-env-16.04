@@ -1,0 +1,7 @@
+FROM harbor.saas.bzlrobot-ift.com/cheetah/cheetah_base:v0.2
+
+MAINTAINER wuchunming02@countrygarden.com.cn
+
+ENV DEBIAN_FRONTEND noninteractive
+
+RUN add-apt-repository ppa:beineri/opt-qt-5.14.2-xenial && sudo apt update && apt install qt514base qt514gamepad python3-dev vim apt-transport-https cmake g++ libeigen3-dev git freeglut3-dev mesa-common-dev libblas-dev liblapack-dev libudev-dev default-jdk glib2.0-dev libxkbcommon-dev

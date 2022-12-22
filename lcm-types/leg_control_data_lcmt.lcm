@@ -4,4 +4,6 @@ struct leg_control_data_lcmt {
     float p[12];
     float v[12];
     float tau_est[12];
+    float tau_measure[12];
+    float acc[12];
 }

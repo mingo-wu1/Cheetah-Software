@@ -1,0 +1,12 @@
+struct body_cmd_lcmt
+{
+    int32_t mode;
+    float   forwardSpeed;
+    float   sideSpeed;
+    float   rotateSpeed;
+    float   bodyHeight;
+    float   footRaiseHeight;
+    float   yaw;
+    float   pitch;
+    float   roll; 
+}

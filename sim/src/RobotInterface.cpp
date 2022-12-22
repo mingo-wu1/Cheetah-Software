@@ -8,7 +8,7 @@
 RobotInterface::RobotInterface(RobotType robotType, Graphics3D *gfx,
                                PeriodicTaskManager *tm, ControlParameters& userParameters)
     : PeriodicTask(tm, ROBOT_INTERFACE_UPDATE_PERIOD, "robot-interface"),
-      _lcm(getLcmUrl(255)),
+      _lcm(getLcmUrl(1)),
       _userParameters(userParameters) {
   _parameter_request_lcmt.requestNumber = 0;
   _gfx = gfx;
@@ -48,8 +48,19 @@ RobotInterface::RobotInterface(RobotType robotType, Graphics3D *gfx,
                  &RobotInterface::handleVisualizationData, this);
 
   printf("[RobotInterface] Init dynamics\n");
+#if (USE_RS485_A1 == 1)
+  _quadruped = robotType == RobotType::MINI_CHEETAH ? buildMiniCheetahRs485A1<double>()
+                                                    : buildCheetah3<double>();
+#elif (USE_LINKAGE == 1)
+  _quadruped = robotType == RobotType::MINI_CHEETAH ? buildMiniCheetahLinkage<double>()
+                                                    : buildCheetah3<double>();
+#elif (USE_LINKAGE_INDUSTRIAL == 1)
+  _quadruped = robotType == RobotType::MINI_CHEETAH ? buildMiniCheetahLinkageIndustrial<double>()
+                                                    : buildCheetah3<double>();
+#else
   _quadruped = robotType == RobotType::MINI_CHEETAH ? buildMiniCheetah<double>()
                                                     : buildCheetah3<double>();
+#endif
   _model = _quadruped.buildModel();
   _simulator = new DynamicsSimulator<double>(_model, false);
   DVec<double> zero12(12);
@@ -59,6 +70,10 @@ RobotInterface::RobotInterface(RobotType robotType, Graphics3D *gfx,
 
   _fwdKinState.q = zero12;
   _fwdKinState.qd = zero12;
+
+  /// Add Begin by wuchunming, 2021-03-17, BZL parameters, no use 3D Graphic Window
+  use_gfx = _controlParameters.use_gfx;
+  /// Add End
 }
 
 void RobotInterface::handleVisualizationData(
@@ -83,6 +98,8 @@ void RobotInterface::handleVisualizationData(
 }
 
 void RobotInterface::run() {
+  /// Add Begin by wuchunming , 2021-03-12, BZL parameters, no use 3D Graphic Window
+  if(use_gfx)/// Add End
   if (_gfx) {
     _gfx->_drawList.updateRobotFromModel(*_simulator, _robotID, true);
     _gfx->update();

@@ -142,6 +142,10 @@ void LinearKFPositionVelocityEstimator<T>::run() {
     R(rindex3, rindex3) =
         (T(1) + (T(1) - trust) * high_suspect_number) * R(rindex3, rindex3);
 
+    //Add Begin by anli, 20210609, Reduce the retreat in X direction in covariance matrix, the confidence of the measured value is higher, the error is smaller, and the measured data is more accurate
+    R(rindex2,rindex2) = T(0.001) * R(rindex2,rindex2);
+    //Add End
+
     trusts(i) = trust;
 
     _ps.segment(i1, 3) = -p_f;

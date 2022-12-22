@@ -1,0 +1,11 @@
+struct body_state_lcmt
+{
+    int32_t mode;
+    int32_t errorCode;
+    float   forwardSpeed;               
+    float   sideSpeed;                  
+    float   rotateSpeed;                
+    float   bodyHeight;                 
+    float   forwardPosition;
+    float   sidePosition;  
+}

@@ -78,6 +78,12 @@ void GameController::updateGamepadCommand(GamepadCommand &gamepadCommand) {
         Vec2<float>(_qGamepad->axisLeftX(), -_qGamepad->axisLeftY());
     gamepadCommand.rightStickAnalog =
         Vec2<float>(_qGamepad->axisRightX(), -_qGamepad->axisRightY());
+    /// Add Begin by wuchunming, 2021-06-02, add button
+    gamepadCommand.buttonUp = _qGamepad->buttonUp();
+    gamepadCommand.buttonDown = _qGamepad->buttonDown();
+    gamepadCommand.buttonLeft = _qGamepad->buttonLeft();
+    gamepadCommand.buttonRight = _qGamepad->buttonRight();
+    /// Add End
   } else {
     gamepadCommand.zero();  // no joystick, return all zeros
   }

@@ -75,11 +75,11 @@ SimControlPanel::SimControlPanel(QWidget* parent)
       ui(new Ui::SimControlPanel),
       _userParameters("user-parameters"),
       _terrainFileName(getConfigDirectoryPath() + DEFAULT_TERRAIN_FILE),
-      _heightmapLCM(getLcmUrl(255)),
-      _pointsLCM(getLcmUrl(255)),
-      _indexmapLCM(getLcmUrl(255)),
-      _ctrlVisionLCM(getLcmUrl(255)),
-      _miniCheetahDebugLCM(getLcmUrl(255))
+      _heightmapLCM(getLcmUrl(0)),
+      _pointsLCM(getLcmUrl(0)),
+      _indexmapLCM(getLcmUrl(0)),
+      _ctrlVisionLCM(getLcmUrl(0)),
+      _miniCheetahDebugLCM(getLcmUrl(0))
 {
 
   ui->setupUi(this); // QT setup
@@ -90,7 +90,16 @@ SimControlPanel::SimControlPanel(QWidget* parent)
   _loadedUserSettings = true;
 
   try {
+/// Change by hanyuanqiang, 2021-08-10, Add unitree RS485 A1 motor parameters
+#if (USE_RS485_A1 == 1)
+    _userParameters.defineAndInitializeFromYamlFile(getConfigDirectoryPath() + "mc-mit-ctrl-user-parameters-rs485-a1.yaml");
+#elif (USE_LINKAGE == 1)
+    _userParameters.defineAndInitializeFromYamlFile(getConfigDirectoryPath() + "mc-mit-ctrl-user-parameters-linkage.yaml");
+#elif (USE_LINKAGE_INDUSTRIAL == 1)
+    _userParameters.defineAndInitializeFromYamlFile(getConfigDirectoryPath() + "mc-mit-ctrl-user-parameters-linkage-industrial.yaml");
+#else
     _userParameters.defineAndInitializeFromYamlFile(getConfigDirectoryPath() + getDefaultUserParameterFileName());
+#endif
   } catch (std::runtime_error& ex) {
     _loadedUserSettings = false;
   }
@@ -367,10 +376,19 @@ void SimControlPanel::on_startButton_clicked() {
   // graphics
   printf("[SimControlPanel] Initialize Graphics...\n");
   _graphicsWindow = new Graphics3D();
-  _graphicsWindow->show();
-  _graphicsWindow->resize(1280, 720);
+
+  /// Del Begin by wuchunming, 2021-03-13, BZL parameters, no use 3D Graphic Window
+  //_graphicsWindow->show();
+  //_graphicsWindow->resize(1280, 720);
+  /// Del End
 
   if (_simulationMode) {
+    
+    /// Add Begin by wuchunming, 2021-03-13, BZL parameters, no use 3D Graphic Window but _simulationMode use
+    _graphicsWindow->show();
+    _graphicsWindow->resize(1280, 720);
+    /// Add End
+
     // run a simulation
 
     try {
@@ -427,7 +445,20 @@ void SimControlPanel::on_startButton_clicked() {
         new RobotInterface(robotType, _graphicsWindow, _interfaceTaskManager, _userParameters);
     loadRobotParameters(_robotInterface->getParams());
     _robotInterface->startInterface();
-    _graphicsWindow->setAnimating(true);
+
+    /// Mod Begin by wuchunming, 2021-03-13, BZL parameters, no use 3D Graphic Window
+    if (_robotInterface->use_gfx) {
+      _graphicsWindow->show();
+      _graphicsWindow->resize(1280, 720);
+      _graphicsWindow->setAnimating(true);
+    }else{
+      _graphicsWindow->setAnimating(false);
+      _graphicsWindow->hide();
+      _graphicsWindow->close();
+    }
+    /// origin code
+    //_graphicsWindow->setAnimating(true);
+    /// Mod End
   }
 
   _state = SimulationWindowState::RUNNING;

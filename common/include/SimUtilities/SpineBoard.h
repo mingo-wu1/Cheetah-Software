@@ -9,6 +9,33 @@
 
 #include "cTypes.h"
 
+/// Add Begin by wuchunming02@countrygarden.com.cn, 2021-01-30, add lcm for spi cmd test
+struct TestSpiCmd {
+  int32_t is_test;
+  float q_des_abad[4];
+  float q_des_hip[4];
+  float q_des_knee[4];
+
+  float qd_des_abad[4];
+  float qd_des_hip[4];
+  float qd_des_knee[4];
+
+  float kp_abad[4];
+  float kp_hip[4];
+  float kp_knee[4];
+
+  float kd_abad[4];
+  float kd_hip[4];
+  float kd_knee[4];
+
+  float tau_abad_ff[4];
+  float tau_hip_ff[4];
+  float tau_knee_ff[4];
+
+  int32_t flags[4];
+};
+/// Add End
+
 /*!
  * Command to spine board
  */
@@ -46,6 +73,13 @@ struct SpiData {
   float qd_abad[4];
   float qd_hip[4];
   float qd_knee[4];
+  /// Add Begin by hanyuanqiang, 2021-07-27, Add current feedback of SPIne
+#if (USE_SPI_DATA_CURRENT == 1)
+  float tau_abad[4];
+  float tau_hip[4];
+  float tau_knee[4];
+#endif
+  /// Add End
   int32_t flags[4];
   int32_t spi_driver_status;
 };

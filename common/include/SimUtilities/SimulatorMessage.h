@@ -15,7 +15,14 @@
 #include "SimUtilities/SpineBoard.h"
 #include "SimUtilities/VisualizationData.h"
 #include "SimUtilities/ti_boardcontrol.h"
+#if (USE_RS485_A1 == 1)
+#include "SimUtilities/Rs485A1Board.h"
+#endif
 #include "Utilities/SharedMemory.h"
+
+/// Add Begin by wuchunming, 20210716, add serialport pressure sensor
+#include "CSerialPort/serialport_pressure_sensor.h"
+/// Add End
 
 /*!
  * The mode for the simulator
@@ -42,6 +49,9 @@ struct SimulatorToRobotMessage {
   // leg data
   SpiData spiData;
   TiBoardData tiBoardData[4];
+#if (USE_RS485_A1 == 1)
+  Rs485A1Data rs485A1Data;
+#endif
   // todo cheetah 3
   ControlParameterRequest controlParameterRequest;
 
@@ -55,10 +65,17 @@ struct RobotToSimulatorMessage {
   RobotType robotType;
   SpiCommand spiCommand;
   TiBoardCommand tiBoardCommand[4];
+#if (USE_RS485_A1 == 1)
+  Rs485A1Command rs485A1Command;
+#endif
 
   VisualizationData visualizationData;
   CheetahVisualization mainCheetahVisualization;
   ControlParameterResponse controlParameterResponse;
+
+  /// Add Begin by wuchunming, 20210716, add serialport pressure sensor
+  itas109::PressureData pressureData;
+  /// Add End
 
   char errorMessage[2056];
 };

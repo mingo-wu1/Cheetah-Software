@@ -81,7 +81,7 @@ void sbus_packet_complete() {
   switch(estop_switch) {
 
     case SWITCH_UP: // ESTOP
-      main_control_settings.mode = RC_mode::OFF;
+      // main_control_settings.mode = RC_mode::OFF;
       break;
 
     case SWITCH_MIDDLE: // recover

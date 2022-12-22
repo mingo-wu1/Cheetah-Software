@@ -33,7 +33,15 @@ extern "C" {
 
 #define K_EXPECTED_COMMAND_SIZE 256
 #define K_WORDS_PER_MESSAGE 66
+/// Add Begin by hanyuanqiang, 2021-07-27, Add current feedback of SPIne
+#if (USE_SPI_DATA_CURRENT == 1)
+#define K_EXPECTED_DATA_SIZE 164
+#define K_RECIVE_DATA_SIZE 42
+#else
 #define K_EXPECTED_DATA_SIZE 116
+#define K_RECIVE_DATA_SIZE 30
+#endif
+/// Add End
 #define K_KNEE_OFFSET_POS 4.35f
 
 #define BYTE_TO_BINARY_PATTERN "%c%c%c%c%c%c%c%c"
@@ -85,6 +93,13 @@ typedef struct {
   float qd_abad[2];
   float qd_hip[2];
   float qd_knee[2];
+  /// Add Begin by hanyuanqiang, 2021-07-27, Add current feedback of SPIne
+#if (USE_SPI_DATA_CURRENT == 1)
+  float tau_abad[2];
+  float tau_hip[2];
+  float tau_knee[2];
+#endif
+  /// Add End
   int32_t flags[2];
   int32_t checksum;
 

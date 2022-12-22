@@ -120,7 +120,7 @@ u16 mip_sdk_port_open(void **port_handle, int port_num, int baudrate)
  printf("[LORD IMU] Port name is %s\n", port_name);
 
  //construct port filename address string
- sprintf(&port_index[0],"%u",port_num);
+ sprintf(&port_index[0],"%d",port_num);
  strcat(port_name, port_index);
 
  printf("Attempting to open port: %s\n",port_name);

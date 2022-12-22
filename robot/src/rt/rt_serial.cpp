@@ -27,6 +27,17 @@
 
 #include "rt/rt_serial.h"
 
+/// Add by hanyuanqiang, 2021-03-26, Support for advanced version of Linux kernel
+#include <linux/version.h>
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(5,4,0)
+#define winsize asmwinsize
+#define termio asmtermio
+#include <sys/ioctl.h>
+#undef winsize
+#undef termio
+#endif
+/// And End
+
 void init_serial_for_sbus(int fd, int baud) {
   printf("\t[RT SERIAL] Configuring serial device...\n");
   struct termios2 tty;

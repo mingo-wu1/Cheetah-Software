@@ -44,8 +44,20 @@ Simulation::Simulation(RobotType robot, Graphics3D* window,
   // init quadruped info
   printf("[Simulation] Build quadruped...\n");
   _robot = robot;
-  _quadruped = _robot == RobotType::MINI_CHEETAH ? buildMiniCheetah<double>()
+
+#if (USE_RS485_A1 == 1)
+  _quadruped = _robot == RobotType::MINI_CHEETAH ? buildMiniCheetahRs485A1<double>()
+                                                 : buildCheetah3<double>(); 
+#elif (USE_LINKAGE == 1)
+  _quadruped = _robot == RobotType::MINI_CHEETAH ? buildMiniCheetahLinkage<double>()
                                                  : buildCheetah3<double>();
+#elif (USE_LINKAGE_INDUSTRIAL == 1)
+  _quadruped = _robot == RobotType::MINI_CHEETAH ? buildMiniCheetahLinkageIndustrial<double>()
+                                                 : buildCheetah3<double>();
+#else
+  _quadruped = _robot == RobotType::MINI_CHEETAH ? buildMiniCheetah<double>()
+                                                 : buildCheetah3<double>();                                              
+#endif
   printf("[Simulation] Build actuator model...\n");
   _actuatorModels = _quadruped.buildActuatorModels();
   _window = window;
@@ -156,6 +168,16 @@ Simulation::Simulation(RobotType robot, Graphics3D* window,
   printf("[Simulation] Setup low-level control...\n");
   // init spine:
   if (_robot == RobotType::MINI_CHEETAH) {
+    /// Add Begin by hanyuanqiang, 2021-03-24, Judge whether to configure A1 motor
+#if (USE_RS485_A1 == 1)
+    for (int leg = 0; leg < 4; leg++) {
+      _rs485A1Boards[leg].init(Quadruped<float>::getSideSign(leg), leg);
+      _rs485A1Boards[leg].data = &_rs485A1Data;
+      _rs485A1Boards[leg].cmd = &_rs485A1Command;
+      _rs485A1Boards[leg].resetData();
+      _rs485A1Boards[leg].resetCommand();
+    }
+#else
     for (int leg = 0; leg < 4; leg++) {
       _spineBoards[leg].init(Quadruped<float>::getSideSign(leg), leg);
       _spineBoards[leg].data = &_spiData;
@@ -163,6 +185,8 @@ Simulation::Simulation(RobotType robot, Graphics3D* window,
       _spineBoards[leg].resetData();
       _spineBoards[leg].resetCommand();
     }
+#endif
+    /// Add End
   } else if (_robot == RobotType::CHEETAH_3) {
     // init ti board
     for (int leg = 0; leg < 4; leg++) {
@@ -339,6 +363,16 @@ void Simulation::step(double dt, double dtLowLevelControl,
 
   // actuator model:
   if (_robot == RobotType::MINI_CHEETAH) {
+    /// Add Begin by hanyuanqiang, 2021-03-24, Judge whether to configure A1 motor
+#if (USE_RS485_A1 == 1)
+    for (int leg = 0; leg < 4; leg++) {
+      for (int joint = 0; joint < 3; joint++) {
+        _tau[leg * 3 + joint] = _actuatorModels[joint].getTorque(
+            _rs485A1Boards[leg].torque_out[joint],
+            _simulator->getState().qd[leg * 3 + joint]);
+      }
+    }
+#else
     for (int leg = 0; leg < 4; leg++) {
       for (int joint = 0; joint < 3; joint++) {
         _tau[leg * 3 + joint] = _actuatorModels[joint].getTorque(
@@ -346,6 +380,8 @@ void Simulation::step(double dt, double dtLowLevelControl,
             _simulator->getState().qd[leg * 3 + joint]);
       }
     }
+#endif
+    /// Add End
   } else if (_robot == RobotType::CHEETAH_3) {
     for (int leg = 0; leg < 4; leg++) {
       for (int joint = 0; joint < 3; joint++) {
@@ -376,22 +412,47 @@ void Simulation::step(double dt, double dtLowLevelControl,
 }
 
 void Simulation::lowLevelControl() {
+
+  /// Add Begin by wuchunming, 20210716, add serialport pressure sensor
+  //sensorData_ = &_sharedMemory().robotToSim.pressureData;
+  /// Add End
+
   if (_robot == RobotType::MINI_CHEETAH) {
-    // update spine board data:
-    for (int leg = 0; leg < 4; leg++) {
-      _spiData.q_abad[leg] = _simulator->getState().q[leg * 3 + 0];
-      _spiData.q_hip[leg] = _simulator->getState().q[leg * 3 + 1];
-      _spiData.q_knee[leg] = _simulator->getState().q[leg * 3 + 2];
+    /// Add Begin by hanyuanqiang, 2021-03-24, Judge whether to configure A1 motor
+#if (USE_RS485_A1 == 1)
+      // update RS485 A1 board data:
+      for (int leg = 0; leg < 4; leg++) {
+        _rs485A1Data.q_abad[leg] = _simulator->getState().q[leg * 3 + 0];
+        _rs485A1Data.q_hip[leg] = _simulator->getState().q[leg * 3 + 1];
+        _rs485A1Data.q_knee[leg] = _simulator->getState().q[leg * 3 + 2];
 
-      _spiData.qd_abad[leg] = _simulator->getState().qd[leg * 3 + 0];
-      _spiData.qd_hip[leg] = _simulator->getState().qd[leg * 3 + 1];
-      _spiData.qd_knee[leg] = _simulator->getState().qd[leg * 3 + 2];
-    }
+        _rs485A1Data.qd_abad[leg] = _simulator->getState().qd[leg * 3 + 0];
+        _rs485A1Data.qd_hip[leg] = _simulator->getState().qd[leg * 3 + 1];
+        _rs485A1Data.qd_knee[leg] = _simulator->getState().qd[leg * 3 + 2];
+      }
 
-    // run spine board control:
-    for (auto& spineBoard : _spineBoards) {
-      spineBoard.run();
-    }
+      // run RS485 A1 board control:
+      for (auto& rs485A1Board : _rs485A1Boards) {
+        rs485A1Board.run();
+      }
+#else
+      // update spine board data:
+      for (int leg = 0; leg < 4; leg++) {
+        _spiData.q_abad[leg] = _simulator->getState().q[leg * 3 + 0];
+        _spiData.q_hip[leg] = _simulator->getState().q[leg * 3 + 1];
+        _spiData.q_knee[leg] = _simulator->getState().q[leg * 3 + 2];
+
+        _spiData.qd_abad[leg] = _simulator->getState().qd[leg * 3 + 0];
+        _spiData.qd_hip[leg] = _simulator->getState().qd[leg * 3 + 1];
+        _spiData.qd_knee[leg] = _simulator->getState().qd[leg * 3 + 2];
+      }
+
+      // run spine board control:
+      for (auto& spineBoard : _spineBoards) {
+        spineBoard.run();
+      }
+#endif
+    /// Add End
 
   } else if (_robot == RobotType::CHEETAH_3) {
     // update data
@@ -416,6 +477,11 @@ void Simulation::lowLevelControl() {
 
 
 void Simulation::highLevelControl() {
+
+  /// Add Begin by wuchunming, 20210716, add serialport pressure sensor
+  //sensorData_ = &_sharedMemory().robotToSim.pressureData;
+  /// Add End
+
   // send joystick data to robot:
   _sharedMemory().simToRobot.gamepadCommand = _window->getDriverCommand();
   _sharedMemory().simToRobot.gamepadCommand.applyDeadband(
@@ -433,7 +499,13 @@ void Simulation::highLevelControl() {
 
   // send leg data to robot
   if (_robot == RobotType::MINI_CHEETAH) {
+    /// Add Begin by hanyuanqiang, 2021-03-24, Judge whether to configure A1 motor
+#if (USE_RS485_A1 == 1)
+    _sharedMemory().simToRobot.rs485A1Data = _rs485A1Data;
+#else
     _sharedMemory().simToRobot.spiData = _spiData;
+#endif
+    /// Add End
   } else if (_robot == RobotType::CHEETAH_3) {
     for (int i = 0; i < 4; i++) {
       _sharedMemory().simToRobot.tiBoardData[i] = *_tiBoards[i].data;
@@ -469,11 +541,17 @@ void Simulation::highLevelControl() {
 
   // update
   if (_robot == RobotType::MINI_CHEETAH) {
-    _spiCommand = _sharedMemory().robotToSim.spiCommand;
+    /// Add Begin by hanyuanqiang, 2021-03-24, Judge whether to configure A1 motor
+#if (USE_RS485_A1 == 1)
+      _rs485A1Command = _sharedMemory().robotToSim.rs485A1Command;
+#else
+      _spiCommand = _sharedMemory().robotToSim.spiCommand;
 
-    // pretty_print(_spiCommand.q_des_abad, "q des abad", 4);
-    // pretty_print(_spiCommand.q_des_hip, "q des hip", 4);
-    // pretty_print(_spiCommand.q_des_knee, "q des knee", 4);
+      // pretty_print(_spiCommand.q_des_abad, "q des abad", 4);
+      // pretty_print(_spiCommand.q_des_hip, "q des hip", 4);
+      // pretty_print(_spiCommand.q_des_knee, "q des knee", 4);
+#endif
+    /// Add End
   } else if (_robot == RobotType::CHEETAH_3) {
     for (int i = 0; i < 4; i++) {
       _tiBoards[i].command = _sharedMemory().robotToSim.tiBoardCommand[i];

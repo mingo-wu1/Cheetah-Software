@@ -12,12 +12,37 @@
 
 #include <linux/spi/spidev.h>
 #include "rt/rt_spi.h"
+#include "Logger/Logger.h"
 #include <lcm/lcm-cpp.hpp>
+
+static BZL_QUADRUPED::Logger _logger("RT_SPI");
 
 unsigned char spi_mode = SPI_MODE_0;
 unsigned char spi_bits_per_word = 8;
-unsigned int spi_speed = 6000000;
+// unsigned int spi_speed = 6000000;
 uint8_t lsb = 0x01;
+
+/// Add by hanyuanqiang, 2021-10-19, Support for advanced version of Linux kernel
+#include <linux/version.h>
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(5,4,0)
+unsigned int spi_speed = 2000000;
+#else
+unsigned int spi_speed = 6000000;
+#endif
+/// And End
+
+/// Add Begin by hanyuanqiang, 2021-07-28, Add SPI support for up2
+enum spi_board_type
+{
+  UPBOARD,
+  UPSQUARED,
+  UNDEFINE
+};
+
+spi_board_type g_spi_board_type = UPBOARD;
+int spi_1_cs_fd = -1;
+int spi_2_cs_fd = -1;
+/// Add End
 
 int spi_1_fd = -1;
 int spi_2_fd = -1;
@@ -40,13 +65,23 @@ const float disabled_torque[3] = {0.f, 0.f, 0.f};
 // only used for actual robot
 const float abad_side_sign[4] = {-1.f, -1.f, 1.f, 1.f};
 const float hip_side_sign[4] = {-1.f, 1.f, -1.f, 1.f};
-const float knee_side_sign[4] = {-.6429f, .6429f, -.6429f, .6429f};
-
+#if((USE_LINKAGE == 1) || (USE_LINKAGE_INDUSTRIAL == 1))
+const float knee_side_sign[4] = {-1.f, 1.f, -1.f, 1.f};
+#else
+const float knee_side_sign[4] = {-.6333f, .6333f, -.6333f, .6333f};
+#endif
 // only used for actual robot
 const float abad_offset[4] = {0.f, 0.f, 0.f, 0.f};
 const float hip_offset[4] = {M_PI / 2.f, -M_PI / 2.f, -M_PI / 2.f, M_PI / 2.f};
+/// Change Begin by hanyuanqiang, 2021-04-30, Modify knee offset
+#if((USE_LINKAGE == 1) || (USE_LINKAGE_INDUSTRIAL == 1))
+const float knee_offset[4] = {K_KNEE_OFFSET_POS - 1.645, -K_KNEE_OFFSET_POS + 1.645,
+                              K_KNEE_OFFSET_POS - 1.645, -K_KNEE_OFFSET_POS + 1.645};
+#else
 const float knee_offset[4] = {K_KNEE_OFFSET_POS, -K_KNEE_OFFSET_POS,
-                              -K_KNEE_OFFSET_POS, K_KNEE_OFFSET_POS};
+                              K_KNEE_OFFSET_POS, -K_KNEE_OFFSET_POS};
+#endif
+/// Change end
 
 /*!
  * Compute SPI message checksum
@@ -123,21 +158,23 @@ void init_spi() {
   memset(&spi_data_drv, 0, sizeof(spi_data_drv));
 
   if (pthread_mutex_init(&spi_mutex, NULL) != 0)
-    printf("[ERROR: RT SPI] Failed to create spi data mutex\n");
+    QUADRUPED_ERROR(_logger, "Failed to create spi data mutex");
 
   if (command_size != K_EXPECTED_COMMAND_SIZE) {
-    printf("[RT SPI] Error command size is %ld, expected %d\n", command_size,
+    QUADRUPED_ERROR(_logger, "command size is %zu, expected %d", command_size,
            K_EXPECTED_COMMAND_SIZE);
   } else
-    printf("[RT SPI] command size good\n");
+    QUADRUPED_INFO(_logger, "command size good");
 
   if (data_size != K_EXPECTED_DATA_SIZE) {
-    printf("[RT SPI] Error data size is %ld, expected %d\n", data_size,
+    QUADRUPED_ERROR(_logger, "data size is %zu, expected %d", data_size,
            K_EXPECTED_DATA_SIZE);
   } else
-    printf("[RT SPI] data size good\n");
+  {
+    QUADRUPED_INFO(_logger, "data size good");
+  }
 
-  printf("[RT SPI] Open\n");
+  QUADRUPED_INFO(_logger, "Open");
   spi_open();
 }
 
@@ -146,50 +183,86 @@ void init_spi() {
  */
 int spi_open() {
   int rv = 0;
-  spi_1_fd = open("/dev/spidev2.0", O_RDWR);
-  if (spi_1_fd < 0) perror("[ERROR] Couldn't open spidev 2.0");
-  spi_2_fd = open("/dev/spidev2.1", O_RDWR);
-  if (spi_2_fd < 0) perror("[ERROR] Couldn't open spidev 2.1");
+  
+  /// Add Begin by hanyuanqiang, 2021-07-28, Add SPI support for up2
+  if ((0 == access("/dev/spidev2.0", F_OK)) && 
+      (0 == access("/dev/spidev2.1", F_OK)))
+  {
+    g_spi_board_type = UPBOARD;
+    QUADRUPED_INFO(_logger, "Board type: UP Board");
+    spi_1_fd = open("/dev/spidev2.0", O_RDWR);
+    spi_2_fd = open("/dev/spidev2.1", O_RDWR);
+  }
+  else if ((0 == access("/dev/spidev1.0", F_OK)) && 
+           (0 == access("/dev/spidev1.1", F_OK)))
+  {
+    g_spi_board_type = UPSQUARED;
+    QUADRUPED_INFO(_logger, "Board type: UP Squared");
+    spi_1_fd = open("/dev/spidev1.0", O_RDWR);
+    spi_2_fd = open("/dev/spidev1.1", O_RDWR);
+    spi_1_cs_fd = open("/sys/class/gpio/gpio419/value", O_WRONLY);
+    spi_2_cs_fd = open("/sys/class/gpio/gpio420/value", O_WRONLY);
+    if (spi_1_cs_fd < 0)
+    {
+      QUADRUPED_ERROR(_logger, "Couldn't open gpio spi_1_cs_fd");
+    }
+    if (spi_2_cs_fd < 0)
+    {
+      QUADRUPED_ERROR(_logger, "Couldn't open gpio spi_2_cs_fd");
+    }
+    int wlen = write(spi_1_cs_fd, "1", 2);
+    wlen = write(spi_2_cs_fd, "1", 2);
+    (void)wlen;
+  }
+  else
+  {
+    g_spi_board_type = UNDEFINE;
+    QUADRUPED_ERROR(_logger, "Undefine board type");
+  }
+  /// Add End
+
+  if (spi_1_fd < 0) QUADRUPED_ERROR(_logger, "Couldn't open spidev 1");
+  if (spi_2_fd < 0) QUADRUPED_ERROR(_logger, "Couldn't open spidev 2");
 
   rv = ioctl(spi_1_fd, SPI_IOC_WR_MODE, &spi_mode);
-  if (rv < 0) perror("[ERROR] ioctl spi_ioc_wr_mode (1)");
+  if (rv < 0) QUADRUPED_ERROR(_logger, "ioctl spi_ioc_wr_mode (1)");
 
   rv = ioctl(spi_2_fd, SPI_IOC_WR_MODE, &spi_mode);
-  if (rv < 0) perror("[ERROR] ioctl spi_ioc_wr_mode (2)");
+  if (rv < 0) QUADRUPED_ERROR(_logger, "ioctl spi_ioc_wr_mode (2)");
 
   rv = ioctl(spi_1_fd, SPI_IOC_RD_MODE, &spi_mode);
-  if (rv < 0) perror("[ERROR] ioctl spi_ioc_rd_mode (1)");
+  if (rv < 0) QUADRUPED_ERROR(_logger, "ioctl spi_ioc_rd_mode (1)");
 
   rv = ioctl(spi_2_fd, SPI_IOC_RD_MODE, &spi_mode);
-  if (rv < 0) perror("[ERROR] ioctl spi_ioc_rd_mode (2)");
+  if (rv < 0) QUADRUPED_ERROR(_logger, "ioctl spi_ioc_rd_mode (2)");
 
   rv = ioctl(spi_1_fd, SPI_IOC_WR_BITS_PER_WORD, &spi_bits_per_word);
-  if (rv < 0) perror("[ERROR] ioctl spi_ioc_wr_bits_per_word (1)");
+  if (rv < 0) QUADRUPED_ERROR(_logger, "ioctl spi_ioc_wr_bits_per_word (1)");
 
   rv = ioctl(spi_2_fd, SPI_IOC_WR_BITS_PER_WORD, &spi_bits_per_word);
-  if (rv < 0) perror("[ERROR] ioctl spi_ioc_wr_bits_per_word (2)");
+  if (rv < 0) QUADRUPED_ERROR(_logger, "ioctl spi_ioc_wr_bits_per_word (2)");
 
   rv = ioctl(spi_1_fd, SPI_IOC_RD_BITS_PER_WORD, &spi_bits_per_word);
-  if (rv < 0) perror("[ERROR] ioctl spi_ioc_rd_bits_per_word (1)");
+  if (rv < 0) QUADRUPED_ERROR(_logger, "ioctl spi_ioc_rd_bits_per_word (1)");
 
   rv = ioctl(spi_2_fd, SPI_IOC_RD_BITS_PER_WORD, &spi_bits_per_word);
-  if (rv < 0) perror("[ERROR] ioctl spi_ioc_rd_bits_per_word (2)");
+  if (rv < 0) QUADRUPED_ERROR(_logger, "ioctl spi_ioc_rd_bits_per_word (2)");
 
   rv = ioctl(spi_1_fd, SPI_IOC_WR_MAX_SPEED_HZ, &spi_speed);
-  if (rv < 0) perror("[ERROR] ioctl spi_ioc_wr_max_speed_hz (1)");
+  if (rv < 0) QUADRUPED_ERROR(_logger, "ioctl spi_ioc_wr_max_speed_hz (1)");
   rv = ioctl(spi_2_fd, SPI_IOC_WR_MAX_SPEED_HZ, &spi_speed);
-  if (rv < 0) perror("[ERROR] ioctl spi_ioc_wr_max_speed_hz (2)");
+  if (rv < 0) QUADRUPED_ERROR(_logger, "ioctl spi_ioc_wr_max_speed_hz (2)");
 
   rv = ioctl(spi_1_fd, SPI_IOC_RD_MAX_SPEED_HZ, &spi_speed);
-  if (rv < 0) perror("[ERROR] ioctl spi_ioc_rd_max_speed_hz (1)");
+  if (rv < 0) QUADRUPED_ERROR(_logger, "ioctl spi_ioc_rd_max_speed_hz (1)");
   rv = ioctl(spi_2_fd, SPI_IOC_RD_MAX_SPEED_HZ, &spi_speed);
-  if (rv < 0) perror("[ERROR] ioctl spi_ioc_rd_max_speed_hz (2)");
+  if (rv < 0) QUADRUPED_ERROR(_logger, "ioctl spi_ioc_rd_max_speed_hz (2)");
 
   rv = ioctl(spi_1_fd, SPI_IOC_RD_LSB_FIRST, &lsb);
-  if (rv < 0) perror("[ERROR] ioctl spi_ioc_rd_lsb_first (1)");
+  if (rv < 0) QUADRUPED_ERROR(_logger, "ioctl spi_ioc_rd_lsb_first (1)");
 
   rv = ioctl(spi_2_fd, SPI_IOC_RD_LSB_FIRST, &lsb);
-  if (rv < 0) perror("[ERROR] ioctl spi_ioc_rd_lsb_first (2)");
+  if (rv < 0) QUADRUPED_ERROR(_logger, "ioctl spi_ioc_rd_lsb_first (2)");
   return rv;
 }
 
@@ -261,19 +334,31 @@ void spine_to_spi(spi_data_t *data, spine_data_t *spine_data, int leg_0) {
     data->qd_knee[i + leg_0] =
         spine_data->qd_knee[i] * knee_side_sign[i + leg_0];
 
+    /// Add Begin by hanyuanqiang, 2021-07-27, Add current feedback of SPIne
+#if (USE_SPI_DATA_CURRENT == 1)
+    data->tau_abad[i + leg_0] =
+        spine_data->tau_abad[i] * abad_side_sign[i + leg_0] * 1.18;
+    data->tau_hip[i + leg_0] =
+        spine_data->tau_hip[i] * hip_side_sign[i + leg_0] * 1.18;
+    data->tau_knee[i + leg_0] =
+        spine_data->tau_knee[i] * knee_side_sign[i + leg_0] * 1.18;
+#endif
+    /// Add End
+
     data->flags[i + leg_0] = spine_data->flags[i];
   }
 
   uint32_t calc_checksum = xor_checksum((uint32_t *)spine_data, 14);
   if (calc_checksum != (uint32_t)spine_data->checksum)
-    printf("SPI ERROR BAD CHECKSUM GOT 0x%hx EXPECTED 0x%hx\n", calc_checksum,
-           spine_data->checksum);
+    QUADRUPED_ERROR(_logger, "BAD CHECKSUM GOT 0x%hx EXPECTED 0x%hx, board_num[0,2]:%d", calc_checksum,
+           spine_data->checksum, leg_0);
 }
 
 /*!
  * send receive data and command from spine
  */
 void spi_send_receive(spi_command_t *command, spi_data_t *data) {
+  int wLen;
   // update driver status flag
   spi_driver_iterations++;
   data->spi_driver_status = spi_driver_iterations << 16;
@@ -283,6 +368,21 @@ void spi_send_receive(spi_command_t *command, spi_data_t *data) {
   uint16_t rx_buf[K_WORDS_PER_MESSAGE];
 
   for (int spi_board = 0; spi_board < 2; spi_board++) {
+    
+    /// Add Begin by hanyuanqiang, 2021-07-28, Add SPI support for up2
+    if (UPSQUARED == g_spi_board_type)
+    {
+      if (0 == spi_board)
+      {
+        wLen = write(spi_1_cs_fd, "0", 2);
+      }
+      else
+      {
+        wLen = write(spi_2_cs_fd, "0", 2);
+      }
+    }
+    /// Add End
+
     // copy command into spine type:
     spi_to_spine(command, &g_spine_cmd, spi_board * 2);
 
@@ -310,9 +410,12 @@ void spi_send_receive(spi_command_t *command, spi_data_t *data) {
     // set up message struct
     for (int i = 0; i < 1; i++) {
       spi_message[i].bits_per_word = spi_bits_per_word;
-      spi_message[i].cs_change = 1;
+      /// Fix by hanyuanqiang, 2021-09-29, Compatible with UP/UP2
+      spi_message[i].cs_change = 0;
       spi_message[i].delay_usecs = 0;
-      spi_message[i].len = word_len * 66;
+      /// Mod Begin by hanyuanqiang, 2021-07-27, Add current feedback of SPIne
+      spi_message[i].len = word_len * K_WORDS_PER_MESSAGE;
+      /// Mod End
       spi_message[i].rx_buf = (uint64_t)rx_buf;
       spi_message[i].tx_buf = (uint64_t)tx_buf;
     }
@@ -322,8 +425,25 @@ void spi_send_receive(spi_command_t *command, spi_data_t *data) {
                    &spi_message);
     (void)rv;
 
+    /// Add Begin by hanyuanqiang, 2021-07-28, Add SPI support for up2
+    if (UPSQUARED == g_spi_board_type)
+    {
+      if (0 == spi_board)
+      {
+        wLen = write(spi_1_cs_fd, "1", 2);
+      }
+      else
+      {
+        wLen = write(spi_2_cs_fd, "1", 2);
+      }
+    }
+    (void)wLen;
+    /// Add End
+
     // flip bytes the other way
-    for (int i = 0; i < 30; i++)
+    /// Mod Begin by hanyuanqiang, 2021-07-27, Add current feedback of SPIne
+    for (int i = 0; i < K_RECIVE_DATA_SIZE; i++)
+      /// Mod End
       data_d[i] = (rx_buf[i] >> 8) + ((rx_buf[i] & 0xff) << 8);
     // data_d[i] = __bswap_16(rx_buf[i]);
 

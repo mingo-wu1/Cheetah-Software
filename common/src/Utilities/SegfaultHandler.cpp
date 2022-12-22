@@ -16,6 +16,7 @@
 
 #include "Utilities/SegfaultHandler.h"
 #include "Utilities/Utilities_print.h"
+#include "Logger/Logger.h"
 
 
 
@@ -37,6 +38,7 @@ static void segfault_handler(int sig) {
 
   if(error_message_buffer)
     strcpy(error_message_buffer, "Segfault!\nCheck the robot controller output for more information.");
+  BZL_QUADRUPED::LoggerShutDown();
   exit(1);
 }
 
@@ -44,6 +46,7 @@ static void sigint_handler(int sig) {
   if(sig == SIGINT && error_message_buffer) {
     strcpy(error_message_buffer, "Robot program has been killed by SIGINT");
   }
+  BZL_QUADRUPED::LoggerShutDown();
   exit(0);
 }
 

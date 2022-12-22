@@ -459,3 +459,6 @@ if (UNITTESTS)
     enable_testing()
     add_test(NAME tester COMMAND $<TARGET_FILE:osqp_tester>)
 endif()
+
+install(TARGETS osqp_demo RUNTIME DESTINATION bin)
+#install(TARGETS osqp_tester RUNTIME DESTINATION bin)

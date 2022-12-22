@@ -5,3 +5,5 @@ file(GLOB_RECURSE sources
 
 add_library(footstep_planner SHARED ${sources})
 target_link_libraries(footstep_planner biomimetics)
+
+install(TARGETS footstep_planner LIBRARY DESTINATION lib)

@@ -119,7 +119,7 @@ size_t DrawList::addCheetah3(Vec4<float> color, bool useOld, bool canHide) {
     _nTotal += 3;
   }
 
-  printf("size of kinematicXform: %lu, j0: %lu\n", _kinematicXform.size(), j0);
+  printf("size of kinematicXform: %zu, j0: %lu\n", _kinematicXform.size(), j0);
 
   buildDrawList();
   return j0;

@@ -23,7 +23,7 @@ void SimulationBridge::run() {
   // init Quadruped Controller
 
   try {
-    printf("[Simulation Driver] Starting main loop...\n");
+    QUADRUPED_INFO(_logger, "Starting main loop...");
     bool firstRun = true;
     for (;;) {
       // wait for our turn to access the shared memory
@@ -35,9 +35,9 @@ void SimulationBridge::run() {
         firstRun = false;
         // check that the robot type is correct:
         if (_robot != _sharedMemory().simToRobot.robotType) {
-          printf(
+          QUADRUPED_INFO(_logger, 
             "simulator and simulatorDriver don't agree on which robot we are "
-            "simulating (robot %d, sim %d)\n",
+            "simulating (robot %d, sim %d)",
             (int)_robot, (int)_sharedMemory().simToRobot.robotType);
           throw std::runtime_error("robot mismatch!");
         }
@@ -59,7 +59,7 @@ void SimulationBridge::run() {
           // if we are alive yet
           break;
         case SimulatorMode::EXIT:  // the simulator is done with us
-          printf("[Simulation Driver] Transitioned to exit mode\n");
+          QUADRUPED_INFO(_logger, "Transitioned to exit mode");
           return;
           break;
         default:
@@ -70,7 +70,9 @@ void SimulationBridge::run() {
       _sharedMemory().robotIsDone();
     }
   } catch (std::exception& e) {
-    strncpy(_sharedMemory().robotToSim.errorMessage, e.what(), sizeof(_sharedMemory().robotToSim.errorMessage));
+    /// Add by hanyuanqiang, 2021-03-30, Prevent errors in compiling high version GCC
+    strncpy(_sharedMemory().robotToSim.errorMessage, e.what(), sizeof(_sharedMemory().robotToSim.errorMessage) - 1);
+    /// Add End
     _sharedMemory().robotToSim.errorMessage[sizeof(_sharedMemory().robotToSim.errorMessage) - 1] = '\0';
     throw e;
   }
@@ -87,15 +89,14 @@ void SimulationBridge::handleControlParameters() {
       _sharedMemory().robotToSim.controlParameterResponse;
   if (request.requestNumber <= response.requestNumber) {
     // nothing to do!
-    printf(
+    QUADRUPED_WARN(_logger, 
         "[SimulationBridge] Warning: the simulator has run a ControlParameter "
-        "iteration, but there is no new request!\n");
+        "iteration, but there is no new request!");
     return;
   }
 
   // sanity check
-  u64 nRequests = request.requestNumber - response.requestNumber;
-  assert(nRequests == 1);
+  assert((request.requestNumber - response.requestNumber) == 1);
 
   response.nParameters = _robotParams.collection._map
                              .size();  // todo don't do this every single time?
@@ -127,14 +128,14 @@ void SimulationBridge::handleControlParameters() {
              name.c_str());  // just for debugging print statements
       response.requestKind = request.requestKind;
 
-      printf("%s\n", response.toString().c_str());
+      QUADRUPED_INFO(_logger, "%s", response.toString().c_str());
 
     } break;
 
     case ControlParameterRequestKind::SET_USER_PARAM_BY_NAME: {
       std::string name(request.name);
       if(!_userParams) {
-        printf("[Simulation Bridge] Warning: tried to set user parameter, but the robot does not have any!\n");
+        QUADRUPED_WARN(_logger, "tried to set user parameter, but the robot does not have any!");
       } else {
         ControlParameter& param = _userParams->collection.lookup(name);
 
@@ -161,7 +162,7 @@ void SimulationBridge::handleControlParameters() {
              name.c_str());  // just for debugging print statements
       response.requestKind = request.requestKind;
 
-      printf("%s\n", response.toString().c_str());
+      QUADRUPED_INFO(_logger, "%s", response.toString().c_str());
 
     } break;
 
@@ -188,7 +189,7 @@ void SimulationBridge::handleControlParameters() {
       response.requestKind =
           request.requestKind;  // just for debugging print statements
 
-      printf("%s\n", response.toString().c_str());
+      QUADRUPED_INFO(_logger, "%s", response.toString().c_str());
     } break;
     default:
       throw std::runtime_error("unhandled get/set");
@@ -200,13 +201,13 @@ void SimulationBridge::handleControlParameters() {
  */
 void SimulationBridge::runRobotControl() {
   if (_firstControllerRun) {
-    printf("[Simulator Driver] First run of robot controller...\n");
+    QUADRUPED_INFO(_logger, "First run of robot controller...");
     if (_robotParams.isFullyInitialized()) {
-      printf("\tAll %ld control parameters are initialized\n",
+      QUADRUPED_INFO(_logger, "\tAll %ld control parameters are initialized",
              _robotParams.collection._map.size());
     } else {
-      printf(
-          "\tbut not all control parameters were initialized. Missing:\n%s\n",
+      QUADRUPED_ERROR(_logger, 
+          "\tbut not all control parameters were initialized. Missing:\n%s",
           _robotParams.generateUnitializedList().c_str());
       throw std::runtime_error(
           "not all parameters initialized when going into RUN_CONTROLLER");
@@ -215,12 +216,12 @@ void SimulationBridge::runRobotControl() {
     auto* userControlParameters = _robotRunner->_robot_ctrl->getUserControlParameters();
     if(userControlParameters) {
       if (userControlParameters->isFullyInitialized()) {
-        printf("\tAll %ld user parameters are initialized\n",
+        QUADRUPED_INFO(_logger, "\tAll %ld user parameters are initialized",
                userControlParameters->collection._map.size());
         _simMode = SimulatorMode::RUN_CONTROLLER;
       } else {
-        printf(
-            "\tbut not all control parameters were initialized. Missing:\n%s\n",
+        QUADRUPED_ERROR(_logger, 
+            "\tbut not all control parameters were initialized. Missing:\n%s",
             userControlParameters->generateUnitializedList().c_str());
         throw std::runtime_error(
             "not all parameters initialized when going into RUN_CONTROLLER");
@@ -234,22 +235,42 @@ void SimulationBridge::runRobotControl() {
         &_sharedMemory().simToRobot.gamepadCommand;
     _robotRunner->spiData = &_sharedMemory().simToRobot.spiData;
     _robotRunner->tiBoardData = _sharedMemory().simToRobot.tiBoardData;
+    /// Add Begin by hanyuanqiang, 2021-03-24
+#if (USE_RS485_A1 == 1)
+    _robotRunner->rs485A1Data = &_sharedMemory().simToRobot.rs485A1Data;
+#endif
+    /// Add End
     _robotRunner->robotType = _robot;
     _robotRunner->vectorNavData = &_sharedMemory().simToRobot.vectorNav;
     _robotRunner->cheaterState = &_sharedMemory().simToRobot.cheaterState;
     _robotRunner->spiCommand = &_sharedMemory().robotToSim.spiCommand;
     _robotRunner->tiBoardCommand =
         _sharedMemory().robotToSim.tiBoardCommand;
+    /// Add Begin by hanyuanqiang, 2021-03-24
+#if (USE_RS485_A1 == 1)
+    _robotRunner->rs485A1Command = &_sharedMemory().robotToSim.rs485A1Command;
+#endif
+    /// Add End
     _robotRunner->controlParameters = &_robotParams;
     _robotRunner->visualizationData =
         &_sharedMemory().robotToSim.visualizationData;
     _robotRunner->cheetahMainVisualization =
         &_sharedMemory().robotToSim.mainCheetahVisualization;
 
+    /// Add Begin by wuchunming, 20210716, add serialport pressure sensor
+    _robotRunner->sensorData_ = &pressureData_;
+    /// Add End
+ 
     _robotRunner->init();
     _firstControllerRun = false;
 
-    sbus_thread = new std::thread(&SimulationBridge::run_sbus, this);
+    /// Del Begin by wuchunming, 20210716, del for add serialport pressure sensor
+    //sbus_thread = new std::thread(&SimulationBridge::run_sbus, this);
+    /// Del End
+
+    /// Add Begin by wuchunming, 20210716, add serialport pressure sensor
+    //InitPressureSensor();
+    /// Add End
   }
   _robotRunner->run();
 }
@@ -258,7 +279,7 @@ void SimulationBridge::runRobotControl() {
  * Run the RC receive thread
  */
 void SimulationBridge::run_sbus() {
-  printf("[run_sbus] starting...\n");
+  QUADRUPED_INFO(_logger, "starting...");
   int port = init_sbus(true);  // Simulation
   while (true) {
     if (port > 0) {
@@ -270,3 +291,33 @@ void SimulationBridge::run_sbus() {
     usleep(5000);
   }
 }
+
+/// Add Begin by wuchunming, 20210716, add serialport pressure sensor
+void SimulationBridge::InitPressureSensor(){
+  QUADRUPED_DEBUG(_logger, "Version : %s", serialPort_.getVersion().c_str());
+  QUADRUPED_DEBUG(_logger, "availableFriendlyPorts : ");
+  portName_ = "/dev/ttyUSB0";
+  QUADRUPED_DEBUG(_logger, "select port name: %s", portName_.c_str());
+
+  // readSlot_.SetSensorData(pressureData_);
+  // serialport init and open
+  serialPort_.init(portName_,
+                  115200, 
+                  itas109::Parity::ParityNone,
+                  itas109::DataBits::DataBits8,
+                  itas109::StopBits::StopOne,
+                  itas109::FlowControl::FlowNone, 512);
+  serialPort_.open();
+  if(serialPort_.isOpened())
+	{
+	  QUADRUPED_DEBUG(_logger, "open success");	
+	}
+	else
+	{
+	  QUADRUPED_INFO(_logger, "open failed");
+  }
+
+  // only connect when data come and read, then write msg immediately
+  serialPort_.readReady.connect(&readSlot_, &itas109::IOSlot::OnWriteMsg);
+}
+/// Add End

@@ -8,8 +8,9 @@
 
 #include <iostream>
 
+#include "../../user/BZL_Controller/BZL_UserParameters.h"
 #include "cppTypes.h"
-#include "../../user/MIT_Controller/MIT_UserParameters.h"
+#include "Logger/Logger.h"
 
 /**
  * Enumerated gait types. Preplanned gaits are defined.
@@ -90,7 +91,7 @@ template <typename T>
 class GaitScheduler {
  public:
   // Constructors for the GaitScheduler
-  GaitScheduler(MIT_UserParameters* _userParameters, float _dt);
+  GaitScheduler(BZL_UserParameters* _userParameters, float _dt);
   ~GaitScheduler(){};
 
   // Initialize the Gait Scheduler
@@ -118,7 +119,7 @@ class GaitScheduler {
  private:
   // The quadruped model
   // Quadruped<T>& _quadruped;
-  MIT_UserParameters* userParameters;
+  BZL_UserParameters* userParameters;
 
   // Control loop timestep change
   T dt;
@@ -131,6 +132,7 @@ class GaitScheduler {
 
   // Track the number of iterations since last info print
   int printIter = 0;
+  BZL_QUADRUPED::Logger _logger;
 };
 
 #endif

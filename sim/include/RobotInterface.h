@@ -77,6 +77,11 @@ class RobotInterface : PeriodicTask {
   FloatingBaseModel<double> _model;
   DynamicsSimulator<double>* _simulator = nullptr;
   FBModelState<double> _fwdKinState;
+
+  /// Add Begin by wuchunming, 2021-03-17, BZL parameters, no use 3D Graphic Window
+ public:
+  bool use_gfx = 0;
+  /// Add End
 };
 
 #endif  // PROJECT_ROBOTINTERFACE_H

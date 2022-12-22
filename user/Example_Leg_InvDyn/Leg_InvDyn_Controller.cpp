@@ -85,11 +85,9 @@ void Leg_InvDyn_Controller::runController(){
   Vec18<float> generalizedAcceleration;
   generalizedAcceleration.head(6)  = commandedAccleration.dBodyVelocity;
   generalizedAcceleration.tail(12) = commandedAccleration.qdd;
-  Vec18<float> generalizedForce2 = H*generalizedAcceleration + Cqd + tau_grav;
 
   // Make sure they match
-  Vec18<float> err = generalizedForce - generalizedForce2;
-  assert( err.norm() < 1e-4 );
+  assert( (generalizedForce - (H*generalizedAcceleration + Cqd + tau_grav)).norm() < 1e-4 );
 
   // Send joint torques to leg controllers
   int dof = 0;

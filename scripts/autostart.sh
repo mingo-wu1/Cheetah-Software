@@ -6,4 +6,4 @@
 #exit 1
 
 cd /home/user/robot-software/build
-./run_mc_2_autostart.sh ./mit_ctrl auto-start
+./run_mc_2_autostart.sh ./bzl_ctrl auto-start

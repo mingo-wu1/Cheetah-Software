@@ -97,7 +97,11 @@ public:
   // Holds the instantaneous desired state and future desired state trajectory
   DesiredStateData<T> data;
 
-  const rc_control_settings* rcCommand;
+  /// Modify Begin by victor, 2021-01-21, del const keywords
+  /// origin code: const rc_control_settings* rcCommand;
+  rc_control_settings* rcCommand;
+  /// Modify End
+
   const GamepadCommand* gamepadCommand;
 
   bool trigger_pressed = false;

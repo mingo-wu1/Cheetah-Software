@@ -25,7 +25,12 @@
 #include "cheetah_visualization_lcmt.hpp"
 #include "state_estimator_lcmt.hpp"
 #include "RobotController.h"
+#include "Logger/Logger.h"
 #include <lcm-cpp.hpp>
+
+/// Add Begin by wuchunming, 20210716, add serialport pressure sensor
+#include "CSerialPort/serialport_pressure_sensor.h"
+/// Add End
 
 class RobotRunner : public PeriodicTask {
  public:
@@ -51,9 +56,17 @@ class RobotRunner : public PeriodicTask {
   SpiCommand* spiCommand;
   TiBoardCommand* tiBoardCommand;
   TiBoardData* tiBoardData;
+#if (USE_RS485_A1 == 1)
+  Rs485A1Data* rs485A1Data;
+  Rs485A1Command* rs485A1Command;
+#endif
   RobotControlParameters* controlParameters;
   VisualizationData* visualizationData;
   CheetahVisualization* cheetahMainVisualization;
+
+  /// Add Begin by wuchunming, 20210716, add serialport pressure sensor
+  itas109::SensorData *sensorData_ = nullptr;
+  /// Add End
 
  private:
   float _ini_yaw;
@@ -79,6 +92,7 @@ class RobotRunner : public PeriodicTask {
 
   FloatingBaseModel<float> _model;
   u64 _iterations = 0;
+  BZL_QUADRUPED::Logger _logger;
 };
 
 #endif  // PROJECT_ROBOTRUNNER_H

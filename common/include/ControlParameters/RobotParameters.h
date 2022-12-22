@@ -39,7 +39,14 @@ class RobotControlParameters : public ControlParameters {
         INIT_PARAMETER(foot_sensor_noise_position),
         INIT_PARAMETER(foot_sensor_noise_velocity),
         INIT_PARAMETER(foot_height_sensor_noise),
-        INIT_PARAMETER(use_rc){}
+        INIT_PARAMETER(use_rc),
+
+        /// Add Begin by wuchunming, 2021-04-19, add Cubic Spline Algorithm
+        INIT_PARAMETER(use_cubicspline_for_qpstand_test),
+        /// Add End
+        /// Add Begin by wuchunming, 2021-03-17, BZL parameters, no use 3D Graphic Window
+        INIT_PARAMETER(use_gfx){}
+        /// Add End
 
   DECLARE_PARAMETER(double, myValue)
   DECLARE_PARAMETER(double, control_mode)
@@ -62,6 +69,13 @@ class RobotControlParameters : public ControlParameters {
   DECLARE_PARAMETER(double, foot_height_sensor_noise)
 
   DECLARE_PARAMETER(s64, use_rc);
+  
+  /// Add Begin by wuchunming, 2021-04-19, add Cubic Spline Algorithm
+  DECLARE_PARAMETER(s64, use_cubicspline_for_qpstand_test);
+  /// Add End
+  /// Add Begin by wuchunming, 2021-03-17, BZL parameters, no use 3D Graphic Window
+  DECLARE_PARAMETER(s64, use_gfx);
+  /// Add End
 };
 
 #endif  // PROJECT_ROBOTPARAMETERS_H

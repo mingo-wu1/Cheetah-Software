@@ -14,6 +14,10 @@
 #include "SimUtilities/VisualizationData.h"
 #include "SimUtilities/GamepadCommand.h"
 
+/// Add Begin by wuchunming, 20210716, add serialport pressure sensor
+#include "CSerialPort/serialport_pressure_sensor.h"
+/// Add End
+
 /*!
  * Parent class of user robot controllers
  */
@@ -44,6 +48,11 @@ protected:
 
   VisualizationData* _visualizationData = nullptr;
   RobotType _robotType;
+
+  /// Add Begin by wuchunming, 20210716, add serialport pressure sensor
+  itas109::SensorData *sensorData_ = nullptr;
+  /// Add End
+
 };
 
 #endif

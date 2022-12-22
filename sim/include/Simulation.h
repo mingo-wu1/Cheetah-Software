@@ -19,6 +19,9 @@
 #include "SimUtilities/ti_boardcontrol.h"
 #include "Utilities/SharedMemory.h"
 #include "Utilities/Timer.h"
+#if (USE_RS485_A1 == 1)
+#include "SimUtilities/Rs485A1Board.h"
+#endif
 
 #include <mutex>
 #include <queue>
@@ -141,7 +144,18 @@ class Simulation {
   SpiData _spiData;
   SpineBoard _spineBoards[4];
   TI_BoardControl _tiBoards[4];
+  /// Add Begin by hanyuanqiang, 2021-03-24
+#if (USE_RS485_A1 == 1)
+  Rs485A1Board _rs485A1Boards[4];
+  Rs485A1Command _rs485A1Command;
+  Rs485A1Data _rs485A1Data;
+#endif
+  /// Add End
   RobotType _robot;
+  /// Add Begin by wuchunming, 20210716, add serialport pressure sensor
+  //itas109::SensorData *sensorData_;
+  /// Add End
+
   lcm::LCM* _lcm = nullptr;
 
   std::function<void(void)> _uiUpdate;

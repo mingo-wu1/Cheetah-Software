@@ -19,7 +19,8 @@ struct GamepadCommand {
   GamepadCommand() { zero(); }
 
   bool leftBumper, rightBumper, leftTriggerButton, rightTriggerButton, back,
-      start, a, b, x, y, leftStickButton, rightStickButton, logitechButton;
+      start, a, b, x, y, leftStickButton, rightStickButton, logitechButton,
+      buttonUp, buttonDown, buttonLeft, buttonRight;
 
   Vec2<float> leftStickAnalog, rightStickAnalog;
   float leftTriggerAnalog, rightTriggerAnalog;
@@ -40,6 +41,10 @@ struct GamepadCommand {
     y = false;
     leftStickButton = false;
     rightStickButton = false;
+    buttonUp = false;
+    buttonDown = false;
+    buttonLeft = false;
+    buttonRight = false;
 
     leftTriggerAnalog = 0;
     rightTriggerAnalog = 0;
@@ -62,6 +67,10 @@ struct GamepadCommand {
     x = lcmt->x;
     b = lcmt->b;
     y = lcmt->y;
+    buttonUp = lcmt->buttonUp;
+    buttonDown = lcmt->buttonDown;
+    buttonLeft = lcmt->buttonLeft;
+    buttonRight = lcmt->buttonRight;
     leftStickButton = lcmt->leftStickButton;
     rightStickButton = lcmt->rightStickButton;
     leftTriggerAnalog = lcmt->leftTriggerAnalog;
@@ -87,6 +96,10 @@ struct GamepadCommand {
     lcmt->x = x;
     lcmt->b = b;
     lcmt->y = y;
+    lcmt->buttonUp = buttonUp;
+    lcmt->buttonDown = buttonDown;
+    lcmt->buttonLeft = buttonLeft;
+    lcmt->buttonRight = buttonRight;
     lcmt->leftStickButton = leftStickButton;
     lcmt->rightStickButton = rightStickButton;
     lcmt->leftTriggerAnalog = leftTriggerAnalog;
@@ -122,6 +135,8 @@ struct GamepadCommand {
         "back: " + boolToString(back) + "\n" + "start: " + boolToString(start) +
         "\n" + "a: " + boolToString(a) + "\n" + "b: " + boolToString(b) + "\n" +
         "x: " + boolToString(x) + "\n" + "y: " + boolToString(y) + "\n" +
+        "buttonUp: " + boolToString(buttonUp) + "\n" + "buttonDown: " + boolToString(buttonDown) + "\n" +
+        "buttonLeft: " + boolToString(buttonLeft) + "\n" + "buttonRight: " + boolToString(buttonRight) + "\n" +
         "leftStickButton: " + boolToString(leftStickButton) + "\n" +
         "rightStickButton: " + boolToString(rightStickButton) + "\n" +
         "leftTriggerAnalog: " + std::to_string(leftTriggerAnalog) + "\n" +

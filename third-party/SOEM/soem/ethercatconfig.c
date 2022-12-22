@@ -536,7 +536,7 @@ int ecx_config_init(ecx_contextt *context, uint8 usetable)
                context->slavelist[slave].FoEdetails = ecx_siigetbyte(context, slave, ssigen + 0x08);
                context->slavelist[slave].EoEdetails = ecx_siigetbyte(context, slave, ssigen + 0x09);
                context->slavelist[slave].SoEdetails = ecx_siigetbyte(context, slave, ssigen + 0x0a);
-               if(1==1 || (ecx_siigetbyte(context, slave, ssigen + 0x0d) & 0x02) > 0)
+               if((ecx_siigetbyte(context, slave, ssigen + 0x0d) & 0x02) > 0)
                {
                   context->slavelist[slave].blockLRW = 1;
                   context->slavelist[0].blockLRW++;

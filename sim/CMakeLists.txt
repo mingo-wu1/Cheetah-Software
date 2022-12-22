@@ -36,9 +36,10 @@ QT5_WRAP_CPP(tst_hdr_moc ${QOBJECT_HEADERS})
 include_directories("include/")
 include_directories("../common/include/")
 include_directories("../lcm-types/cpp")
-include_directories("/usr/local/include/lcm/")   # lcm includes
+include_directories("/usr/include/lcm/")   # lcm includes
 include_directories("../third-party/ParamHandler")
 include_directories(${CMAKE_BINARY_DIR})
+include_directories("../third-party/CSerialPort/include")
 file(GLOB sources "src/*.cpp")
 
 find_package(Qt5Core COMPONENTS QtGamepad REQUIRED)
@@ -62,4 +63,4 @@ if (APPLE)
   target_link_libraries(sim "-framework GLUT")
 endif (APPLE)
 
-
+install(TARGETS sim RUNTIME DESTINATION bin)

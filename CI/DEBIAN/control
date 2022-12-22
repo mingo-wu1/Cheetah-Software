@@ -1,0 +1,10 @@
+Package: cheetah
+Section: free
+Priority: optional
+Depends: qt514base qt514gamepad libeigen3-dev freeglut3-dev mesa-common-dev libblas-dev liblapack-dev libudev-dev default-jdk glib2.0-dev libxkbcommon-dev python3-dev
+Suggests: 
+Installed-Size: 
+Maintainer: wuchunming02@countrygarden.com.cn
+Homepage: 
+Provides: 
+Description: Cheetah System

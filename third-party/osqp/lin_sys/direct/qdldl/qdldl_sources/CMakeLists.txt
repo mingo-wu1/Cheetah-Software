@@ -207,3 +207,6 @@ if (UNITTESTS)
     enable_testing()
     add_test(NAME tester COMMAND $<TARGET_FILE:qdldl_tester>)
 endif()
+
+install(TARGETS qdldl_example RUNTIME DESTINATION bin)
+#install(TARGETS qdldl_tester RUNTIME DESTINATION bin)

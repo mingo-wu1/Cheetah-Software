@@ -190,14 +190,26 @@ static void filter_callback(void* user_ptr, u8* packet, u16 packet_size, u8 call
             mip_filter_attitude_quaternion_byteswap(&quat);
             dataMutex.lock();
             gLordImu->quat = Vec4<float>(quat.q);
-            Mat3<float> g_R_imu, r_R_imup;
+            /// Mod Begin by peibo, wuchunming, 2020-02-24, mod imu
 
-            g_R_imu << 0, 1, 0, 1, 0, 0, 0, 0, -1;
-            r_R_imup << 0, 0, 1, 0, -1, 0, 1, 0, 0;
+            Vec3<float> ori_rpy = ori::quatToRPY(gLordImu->quat);
+	    ori_rpy(1) = -ori_rpy(1);
+	    ori_rpy(2) = -ori_rpy(2);
 
-            Vec4<float> ql = ori::rotationMatrixToQuaternion(g_R_imu.transpose());
-            Vec4<float> qr = ori::rotationMatrixToQuaternion(r_R_imup);
-            gLordImu->quat = ori::quatProduct(ql, ori::quatProduct(gLordImu->quat, qr));
+	    Vec4<float> tran_q = ori::rpyToQuat(ori_rpy);
+	    gLordImu->quat = tran_q;
+
+            /// origin code
+            //Mat3<float> g_R_imu, r_R_imup;
+
+            //g_R_imu << 0, 1, 0, 1, 0, 0, 0, 0, -1;
+            //r_R_imup << 0, 0, 1, 0, -1, 0, 1, 0, 0;
+
+            //Vec4<float> ql = ori::rotationMatrixToQuaternion(g_R_imu.transpose());
+            //Vec4<float> qr = ori::rotationMatrixToQuaternion(r_R_imup);
+            //gLordImu->quat = ori::quatProduct(ql, ori::quatProduct(gLordImu->quat, qr));
+            
+            /// Mod End
 
             gLordImu->good_packets++;
             dataMutex.unlock();
@@ -247,9 +259,18 @@ static void ahrs_callback(void* user_ptr, u8* packet, u16 packet_size, u8 callba
             mip_ahrs_scaled_accel_byteswap(&accel);
             //gLordImu->acc = Vec3<float>(accel.scaled_accel);
             dataMutex.lock();
-            gLordImu->acc[0] = 9.81f * accel.scaled_accel[2];
+
+            /// Mod Begin by peibo, wuchunming, 2020-02-24, mod imu
+            gLordImu->acc[0] = 9.81f * accel.scaled_accel[0];
             gLordImu->acc[1] = -9.81f * accel.scaled_accel[1];
-            gLordImu->acc[2] = 9.81f * accel.scaled_accel[0];
+            gLordImu->acc[2] = -9.81f * accel.scaled_accel[2];
+
+            /// origin code
+            //gLordImu->acc[0] = 9.81f * accel.scaled_accel[2];
+            //gLordImu->acc[1] = -9.81f * accel.scaled_accel[1];
+            //gLordImu->acc[2] = 9.81f * accel.scaled_accel[0];
+            /// Mod End
+
             gLordImu->good_packets++;
             dataMutex.unlock();
             break;
@@ -258,9 +279,18 @@ static void ahrs_callback(void* user_ptr, u8* packet, u16 packet_size, u8 callba
             memcpy(&gyro, field_data, sizeof(mip_ahrs_scaled_gyro));
             mip_ahrs_scaled_gyro_byteswap(&gyro);
             //gLordImu->gyro = Vec3<float>(gyro.scaled_gyro);
-            gLordImu->gyro[0] = gyro.scaled_gyro[2];
+
+            /// Mod Begin by peibo, wuchunming, 2020-02-24, mod imu
+            gLordImu->gyro[0] = gyro.scaled_gyro[0];
             gLordImu->gyro[1] = -gyro.scaled_gyro[1];
-            gLordImu->gyro[2] = gyro.scaled_gyro[0];
+            gLordImu->gyro[2] = -gyro.scaled_gyro[2];
+
+            /// origin code
+            //gLordImu->gyro[0] = gyro.scaled_gyro[2];
+            //gLordImu->gyro[1] = -gyro.scaled_gyro[1];
+            //gLordImu->gyro[2] = gyro.scaled_gyro[0];
+            /// Mod End
+
             gLordImu->good_packets++;
             dataMutex.unlock();
             break;

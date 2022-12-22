@@ -4,7 +4,7 @@
  * Periodic tasks have a task manager, which measure how long they take to run.
  */
 #ifdef linux
- #include <sys/timerfd.h>
+#include <sys/timerfd.h>
 #endif
 
 #include <unistd.h>
@@ -23,7 +23,7 @@
  */
 PeriodicTask::PeriodicTask(PeriodicTaskManager* taskManager, float period,
                            std::string name)
-    : _period(period), _name(name) {
+    : _period(period), _name(name), _logger("PeriodicTask") {
   taskManager->addTask(this);
 }
 
@@ -32,7 +32,7 @@ PeriodicTask::PeriodicTask(PeriodicTaskManager* taskManager, float period,
  */
 void PeriodicTask::start() {
   if (_running) {
-    printf("[PeriodicTask] Tried to start %s but it was already running!\n",
+    QUADRUPED_INFO(_logger, "Tried to start %s but it was already running!",
            _name.c_str());
     return;
   }
@@ -46,14 +46,14 @@ void PeriodicTask::start() {
  */
 void PeriodicTask::stop() {
   if (!_running) {
-    printf("[PeriodicTask] Tried to stop %s but it wasn't running!\n",
+    QUADRUPED_INFO(_logger, "Tried to stop %s but it wasn't running!",
            _name.c_str());
     return;
   }
   _running = false;
-  printf("[PeriodicTask] Waiting for %s to stop...\n", _name.c_str());
+  QUADRUPED_INFO(_logger, "Waiting for %s to stop...", _name.c_str());
   _thread.join();
-  printf("[PeriodicTask] Done!\n");
+  QUADRUPED_INFO(_logger, "Done!");
   cleanup();
 }
 
@@ -110,7 +110,7 @@ void PeriodicTask::loopFunction() {
 #endif
   unsigned long long missed = 0;
 
-  printf("[PeriodicTask] Start %s (%d s, %d ns)\n", _name.c_str(), seconds,
+  QUADRUPED_INFO(_logger, "Start %s (%d s, %d ns)", _name.c_str(), seconds,
          nanoseconds);
   while (_running) {
     _lastPeriodTime = (float)t.getSeconds();
@@ -124,7 +124,7 @@ void PeriodicTask::loopFunction() {
     _maxPeriod = std::max(_maxPeriod, _lastPeriodTime);
     _maxRuntime = std::max(_maxRuntime, _lastRuntime);
   }
-  printf("[PeriodicTask] %s has stopped!\n", _name.c_str());
+  QUADRUPED_INFO(_logger, "%s has stopped!", _name.c_str());
 }
 
 PeriodicTaskManager::~PeriodicTaskManager() {}

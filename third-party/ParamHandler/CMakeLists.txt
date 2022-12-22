@@ -288,3 +288,5 @@ if(MSVC)
 	endif()
 endif()
 
+install(TARGETS dynacore_yaml-cpp LIBRARY DESTINATION lib)
+install(TARGETS dynacore_param_handler LIBRARY DESTINATION lib)
